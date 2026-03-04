@@ -5407,7 +5407,7 @@ async def maker():
             </div>
             <div class="modal-footer">
                 <button class="modal-btn modal-btn-cancel" onclick="closeConfirmModal()">Cancel</button>
-                <button id="confirm-modal-btn" class="modal-btn modal-btn-confirm">Confirm</button>
+                <button id="confirm-modal-btn" class="modal-btn modal-btn-confirm" onclick="executeConfirmAction()">Confirm</button>
             </div>
         </div>
     </div>
