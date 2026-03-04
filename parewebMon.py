@@ -5322,7 +5322,96 @@ async def maker():
                         '<div class="status-box error"><p>Deploy error: ' + error.message + '</p></div>';
                 }});
         }}
+
+        // Generic confirmation modal
+        let pendingConfirmCallback = null;
+
+        function showConfirmModal(title, icon, content, confirmBtnText, confirmCallback, isDanger = false) {{
+            pendingConfirmCallback = confirmCallback;
+
+            const modal = document.getElementById('confirm-modal');
+            const header = document.getElementById('confirm-modal-header');
+            const modalIcon = document.getElementById('confirm-modal-icon');
+            const modalTitle = document.getElementById('confirm-modal-title');
+            const bodyContent = document.getElementById('confirm-modal-body');
+            const confirmBtn = document.getElementById('confirm-modal-btn');
+
+            modalIcon.textContent = icon;
+            modalTitle.textContent = title;
+            bodyContent.innerHTML = content;
+            confirmBtn.textContent = confirmBtnText;
+
+            if (isDanger) {{
+                header.className = 'modal-header danger';
+                confirmBtn.className = 'modal-btn modal-btn-confirm danger';
+            }} else {{
+                header.className = 'modal-header warning';
+                confirmBtn.className = 'modal-btn modal-btn-confirm';
+            }}
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }}
+
+        function closeConfirmModal() {{
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            pendingConfirmCallback = null;
+        }}
+
+        function executeConfirmAction() {{
+            if (pendingConfirmCallback) {{
+                const callback = pendingConfirmCallback;
+                closeConfirmModal();
+                callback();
+            }}
+        }}
+
+        // Attach confirm modal event handlers
+        (function initConfirmModal() {{
+            const confirmModalBtn = document.getElementById('confirm-modal-btn');
+            if (confirmModalBtn) {{
+                confirmModalBtn.addEventListener('click', executeConfirmAction);
+            }}
+
+            const confirmModal = document.getElementById('confirm-modal');
+            if (confirmModal) {{
+                confirmModal.addEventListener('click', function(e) {{
+                    if (e.target === this) {{
+                        closeConfirmModal();
+                    }}
+                }});
+            }}
+        }})();
+
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                const confirmModal = document.getElementById('confirm-modal');
+                if (confirmModal && confirmModal.classList.contains('active')) {{
+                    closeConfirmModal();
+                }}
+            }}
+        }});
     </script>
+
+    <!-- Generic Confirmation Modal -->
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-dialog">
+            <div id="confirm-modal-header" class="modal-header">
+                <span id="confirm-modal-icon" class="modal-icon">ℹ️</span>
+                <h3 id="confirm-modal-title">Confirm Action</h3>
+            </div>
+            <div class="modal-body">
+                <div id="confirm-modal-body"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-cancel" onclick="closeConfirmModal()">Cancel</button>
+                <button id="confirm-modal-btn" class="modal-btn modal-btn-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     </body>
     </html>
     """
