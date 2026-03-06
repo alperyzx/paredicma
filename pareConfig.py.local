@@ -43,3 +43,21 @@ slowlog-max-len 10
 rename-command FLUSHALL "aO**3p**qw"
 rename-command FLUSHDB  "qw**f0**tU"
 '''
+
+# ─── AI Configuration ───────────────────────────────────────────────────────
+# Provider: "ollama" | "openai" | "azure"
+aiProvider = "ollama"
+
+# Ollama settings (used when aiProvider = "ollama")
+ollamaUrl = "http://localhost:11434"
+aiModel = "qwen3:4b-instruct-2507-q4_K_M"  # change to "qwen3:30b" for higher quality
+
+# OpenAI settings (used when aiProvider = "openai")
+openaiApiKey = ""                  # sk-...
+openaiModel  = "gpt-4o-mini"       # or "gpt-4o", "o1-mini", etc.
+
+# Azure OpenAI settings (used when aiProvider = "azure")
+azureApiKey     = ""
+azureEndpoint   = ""               # e.g. https://YOUR-RESOURCE.openai.azure.com
+azureDeployment = ""               # e.g. gpt-4o
+azureApiVersion = "2025-01-01-preview"

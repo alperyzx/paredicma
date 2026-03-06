@@ -3963,3 +3963,138 @@ def get_cluster_creation_form_wv():
     """
     
     return html
+
+
+# ─── AI Analysis Web Functions ─────────────────────────────────────────────────
+
+def ai_cluster_health_wv() -> str:
+    """
+    Gather cluster topology and call AI to analyze health.
+    Checks: each master has a replica, replica is on a different server.
+    Returns styled HTML with topology table and AI analysis.
+    """
+    try:
+        from pareAI import analyze_cluster_health
+        result = analyze_cluster_health()
+
+        if result.get("error"):
+            return '<div class="error-box"><strong>Error gathering cluster data:</strong> ' + result["error"] + '</div>'
+
+        topology = result.get("topology", {})
+        analysis = result.get("analysis", "No analysis returned.")
+        model_used = result.get("model", "unknown")
+        masters = topology.get("masters", {})
+        down = topology.get("down_nodes", [])
+
+        # Build topology table rows
+        rows = ""
+        for mid, m in masters.items():
+            if not m["replicas"]:
+                rep_html = '<span style="color:red;font-weight:bold">&#9888; None &ndash; Critical!</span>'
+            else:
+                parts = []
+                for r in m["replicas"]:
+                    same = r["server_ip"] == m["server_ip"]
+                    col = "orange" if same else "green"
+                    note = " (same server!)" if same else " (diff server OK)"
+                    parts.append(
+                        '<span style="color:' + col + '"><b>' + r["address"] + '</b>' + note + '</span>'
+                    )
+                rep_html = "<br>".join(parts)
+            rows += (
+                "<tr>"
+                + '<td style="padding:6px 10px;border-bottom:1px solid #ddd;font-weight:bold">' + m["address"] + "</td>"
+                + '<td style="padding:6px 10px;border-bottom:1px solid #ddd">' + m["server_ip"] + "</td>"
+                + '<td style="padding:6px 10px;border-bottom:1px solid #ddd">' + rep_html + "</td>"
+                + "</tr>"
+            )
+
+        # Down nodes warning
+        down_html = ""
+        if down:
+            items = "".join(
+                '<li style="color:red">' + d["address"] + " (" + d["role"] + ")</li>"
+                for d in down
+            )
+            down_html = '<div class="error-box"><strong>Down Nodes:</strong><ul>' + items + '</ul></div>'
+
+        # Status color based on AI assessment
+        au = analysis.upper()
+        if "CRITICAL" in au:
+            sc, sb = "#b71c1c", "#ffebee"
+        elif "WARNING" in au:
+            sc, sb = "#e65100", "#fff3e0"
+        else:
+            sc, sb = "#1b5e20", "#e8f5e9"
+
+        html = '<div style="margin-top:10px">'
+        html += "<h4>Cluster Topology (Master / Replica Map)</h4>"
+        html += '<table style="width:100%;border-collapse:collapse;margin-bottom:12px">'
+        html += (
+            '<thead><tr style="background:#f0f0f0">'
+            + '<th style="padding:8px 10px;border-bottom:2px solid #ddd;text-align:left">Master Node</th>'
+            + '<th style="padding:8px 10px;border-bottom:2px solid #ddd;text-align:left">Server IP</th>'
+            + '<th style="padding:8px 10px;border-bottom:2px solid #ddd;text-align:left">Replicas &amp; Server Location</th>'
+            + "</tr></thead>"
+        )
+        html += "<tbody>" + rows + "</tbody></table>"
+        html += down_html
+        html += "<h4>AI Health Assessment</h4>"
+        html += (
+            '<div style="background:' + sb + ';border-left:4px solid ' + sc
+            + ';padding:12px 16px;border-radius:4px;white-space:pre-wrap;font-family:monospace;font-size:0.9em">'
+            + analysis + '</div>'
+        )
+        html += '<p style="color:#888;font-size:0.8em;margin-top:6px">Model: ' + model_used + '</p>'
+        html += "</div>"
+        return html
+
+    except ImportError:
+        return '<div class="error-box">pareAI module not found. Ensure pareAI.py is in the project directory.</div>'
+    except Exception as e:
+        return '<div class="error-box">AI cluster analysis failed: ' + str(e) + '</div>'
+
+
+def ai_log_analysis_wv(redisNode: str, line_count: int = 200) -> str:
+    """
+    Read a node's Redis log and use AI to analyze it for post-failover health.
+    Returns styled HTML with the AI analysis result.
+    """
+    try:
+        from pareAI import analyze_logs
+        result = analyze_logs(redisNode, line_count)
+
+        if result.get("error"):
+            return '<div class="error-box"><strong>Error reading log:</strong> ' + result["error"] + '</div>'
+
+        analysis = result.get("analysis", "No analysis returned.")
+        model_used = result.get("model", "unknown")
+        lines_checked = result.get("log_lines", line_count)
+
+        au = analysis.upper()
+        if "CRITICAL" in au:
+            sc, sb = "#b71c1c", "#ffebee"
+        elif "WARNING" in au:
+            sc, sb = "#e65100", "#fff3e0"
+        else:
+            sc, sb = "#1b5e20", "#e8f5e9"
+
+        html = '<div style="margin-top:10px">'
+        html += "<h4>AI Log Analysis</h4>"
+        html += (
+            '<p style="color:#666;font-size:0.9em">Analyzed last '
+            + str(lines_checked) + ' log lines from node ' + redisNode + '</p>'
+        )
+        html += (
+            '<div style="background:' + sb + ';border-left:4px solid ' + sc
+            + ';padding:12px 16px;border-radius:4px;white-space:pre-wrap;font-family:monospace;font-size:0.9em">'
+            + analysis + '</div>'
+        )
+        html += '<p style="color:#888;font-size:0.8em;margin-top:6px">Model: ' + model_used + '</p>'
+        html += "</div>"
+        return html
+
+    except ImportError:
+        return '<div class="error-box">pareAI module not found. Ensure pareAI.py is in the project directory.</div>'
+    except Exception as e:
+        return '<div class="error-box">AI log analysis failed: ' + str(e) + '</div>'

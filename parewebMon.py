@@ -1881,6 +1881,19 @@ async def monitor():
         <div id="memory-usage-result" style="margin-top: 10px;"></div>
     </div>
 
+    <button class="collapsible">8 - AI Cluster Health Analysis</button>
+    <div class="content">
+        <p style="color:#666;font-size:0.9em;">
+            Analyzes the cluster topology using AI: checks whether each master has a replica
+            and whether replicas are running on different servers.
+        </p>
+        <div class="button-container">
+            <button class="monitor-button" onclick="fetchAIClusterHealth()">&#129504; Run AI Cluster Analysis</button>
+            <span id="ai-cluster-spinner" style="display:none;margin-left:10px">&#9203; Analyzing with AI (may take ~30s)...</span>
+        </div>
+        <div id="ai-cluster-health-result" style="margin-top: 10px;"></div>
+    </div>
+
     <script>
         const collapsibles = document.querySelectorAll(".collapsible");
         collapsibles.forEach(button => {{
@@ -2017,6 +2030,23 @@ async def monitor():
                 .catch(error => {{
                     document.getElementById('memory-usage-result').innerHTML =
                         "<p style='color: red;'>Error fetching memory usage: " + error + "</p>";
+                }});
+        }}
+
+        function fetchAIClusterHealth() {{
+            const resultDiv = document.getElementById('ai-cluster-health-result');
+            const spinner = document.getElementById('ai-cluster-spinner');
+            resultDiv.innerHTML = '';
+            spinner.style.display = 'inline';
+            fetch('/ai/cluster-health')
+                .then(response => response.text())
+                .then(data => {{
+                    resultDiv.innerHTML = data;
+                    spinner.style.display = 'none';
+                }})
+                .catch(error => {{
+                    resultDiv.innerHTML = "<p style='color: red;'>Error: " + error + "</p>";
+                    spinner.style.display = 'none';
                 }});
         }}
         
@@ -2204,6 +2234,29 @@ async def manager():
             <br><br>
         </form>
         <div id="show-log-result" style="margin-top: 10px;"></div>
+    </div>
+
+    <button class="collapsible">8 - AI Log Analysis (Post-Failover)</button>
+    <div class="content">
+        <p style="color:#666;font-size:0.9em;">
+            After a failover, select a node and run AI analysis on its log file to verify
+            everything is healthy: role change, connection recovery, and cluster status.
+        </p>
+        <form id="ai-log-form" onsubmit="fetchAILogAnalysis(event)">
+            <label for="aiLogNode">Select Node:</label>
+            <select id="aiLogNode" name="redisNode">
+                {''.join([f"<option value='{node}'>{node}</option>" for node in nodeList])}
+            </select>
+            <br><br>
+            <label for="ai_line_count">Log lines to analyze:</label>
+            <input type="number" id="ai_line_count" name="line_count" min="50" max="1000" value="200">
+            <br><br>
+            <div class="button-container">
+                <input class="manager-button" type="submit" value="&#129504; Analyze Log with AI">
+                <span id="ai-log-spinner" style="display:none;margin-left:10px">&#9203; Analyzing (may take ~30s)...</span>
+            </div>
+        </form>
+        <div id="ai-log-analysis-result" style="margin-top: 10px;"></div>
     </div>
 
     <script>
@@ -2464,6 +2517,26 @@ async def manager():
                 }})
                 .catch(error => {{
                     document.getElementById('show-log-result').innerHTML = "<p style='color: red;'>Error fetching log: " + error + "</p>";
+                }});
+        }}
+
+        function fetchAILogAnalysis(event) {{
+            if (event) event.preventDefault();
+            const formData = new FormData(document.getElementById('ai-log-form'));
+            const params = new URLSearchParams(formData).toString();
+            const resultDiv = document.getElementById('ai-log-analysis-result');
+            const spinner = document.getElementById('ai-log-spinner');
+            resultDiv.innerHTML = '';
+            spinner.style.display = 'inline';
+            fetch('/ai/log-analysis?' + params)
+                .then(response => response.text())
+                .then(data => {{
+                    resultDiv.innerHTML = data;
+                    spinner.style.display = 'none';
+                }})
+                .catch(error => {{
+                    resultDiv.innerHTML = "<p style='color: red;'>Error: " + error + "</p>";
+                    spinner.style.display = 'none';
                 }});
         }}
     </script>
@@ -5512,6 +5585,38 @@ async def maker_create_cluster(
                 <pre>{trace}</pre>
             </div>
             """
+        )
+
+
+# ─── AI Endpoints ─────────────────────────────────────────────────────────────
+
+@app.get("/ai/cluster-health", response_class=HTMLResponse)
+async def ai_cluster_health():
+    """
+    AI-powered cluster state analysis.
+    Checks: each master has a replica, replica is on a different server than master.
+    """
+    try:
+        result = ai_cluster_health_wv()
+        return HTMLResponse(content=f'<div class="response-container">{result}</div>')
+    except Exception as e:
+        return HTMLResponse(
+            content=f'<div class="response-container error-message"><p>Error: {str(e)}</p></div>'
+        )
+
+
+@app.get("/ai/log-analysis", response_class=HTMLResponse)
+async def ai_log_analysis(redisNode: str, line_count: int = 200):
+    """
+    AI-powered Redis log analysis for post-failover health check.
+    Reads the specified node's log file and asks AI to assess health.
+    """
+    try:
+        result = ai_log_analysis_wv(redisNode, line_count)
+        return HTMLResponse(content=f'<div class="response-container">{result}</div>')
+    except Exception as e:
+        return HTMLResponse(
+            content=f'<div class="response-container error-message"><p>Error: {str(e)}</p></div>'
         )
 
 
