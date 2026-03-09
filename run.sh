@@ -89,59 +89,51 @@ fi
 echo "$$ $AVAILABLE_PORT" > "$PID_FILE"
 trap 'rm -f "$PID_FILE"' EXIT
 
-# Check and install required packages
+# Check and install required packages from requirements.txt
 check_and_install_packages() {
     local python_cmd=$1
-    local required_packages=("fastapi" "uvicorn" "python-multipart")
-    local missing_packages=()
+    
+    if [ ! -f "requirements.txt" ]; then
+        echo "Warning: requirements.txt not found. Skipping package installation."
+        return
+    fi
 
-    echo "Checking required packages..."
+    echo "Checking required packages from requirements.txt..."
 
-    for package in "${required_packages[@]}"; do
-        # Special case for python-multipart which is imported as 'multipart'
-        if [[ "$package" == "python-multipart" ]]; then
-            if ! $python_cmd -c "import multipart" &>/dev/null; then
-                missing_packages+=("$package")
-            fi
-        elif ! $python_cmd -c "import $package" &>/dev/null; then
-            missing_packages+=("$package")
-        fi
-    done
-
-    if [ ${#missing_packages[@]} -eq 0 ]; then
-        echo "All required packages are installed."
+    # Check for pip
+    if command -v pip3 &>/dev/null; then
+        pip_cmd="pip3"
+    elif command -v pip &>/dev/null; then
+        pip_cmd="pip"
     else
-        echo "Installing missing packages: ${missing_packages[*]}"
-
-        # Check for pip
-        if command -v pip3 &>/dev/null; then
-            pip_cmd="pip3"
-        elif command -v pip &>/dev/null; then
-            pip_cmd="pip"
+        echo "pip not found. Installing pip..."
+        if [ -f /etc/debian_version ]; then
+            # Debian/Ubuntu
+            sudo apt update && sudo apt install -y python3-pip
+        elif [ -f /etc/redhat-release ]; then
+            # RHEL/CentOS/Fedora
+            sudo yum install -y python3-pip
         else
-            echo "pip not found. Installing pip..."
-            if [ -f /etc/debian_version ]; then
-                # Debian/Ubuntu
-                sudo apt update && sudo apt install -y python3-pip
-            elif [ -f /etc/redhat-release ]; then
-                # RHEL/CentOS/Fedora
-                sudo yum install -y python3-pip
-            else
-                echo "Please install pip manually and try again."
-                exit 1
-            fi
-            pip_cmd="pip3"
+            echo "Please install pip manually and try again."
+            exit 1
         fi
+        pip_cmd="pip3"
+    fi
 
-        # Install missing packages
-        if [[ -n "$VIRTUAL_ENV" ]]; then
-            # In venv: do NOT use --user
-            $pip_cmd install "${missing_packages[@]}"
-        else
-            # System Python: use --user
-            $pip_cmd install --user "${missing_packages[@]}"
-        fi
+    # Install packages from requirements.txt
+    echo "Installing packages from requirements.txt..."
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        # In venv: do NOT use --user
+        $pip_cmd install -r requirements.txt
+    else
+        # System Python: use --user
+        $pip_cmd install --user -r requirements.txt
+    fi
+    
+    if [ $? -eq 0 ]; then
         echo "Package installation complete."
+    else
+        echo "Warning: Some packages may not have been installed successfully."
     fi
 }
 
