@@ -2686,19 +2686,36 @@ async def manager():
         function switchMasterSlave(event) {{
             event.preventDefault();
             const formData = new FormData(document.getElementById('switch-master-slave-form'));
-            const params = new URLSearchParams(formData).toString();
-            
-            // Add processing message
-            document.getElementById('switch-master-slave-result').innerHTML = "<p>Processing request...</p>";
-            
-            fetch('/manager/switch-master-slave/?' + params)
-                .then(response => response.text())
-                .then(data => {{
-                    document.getElementById('switch-master-slave-result').innerHTML = data;
-                }})
-                .catch(error => {{
-                    document.getElementById('switch-master-slave-result').innerHTML = "<p style='color: red;'>Error switching master/slave: " + error + "</p>";
-                }});
+            const nodeAddress = formData.get('redisNode');
+
+            showConfirmModal(
+                '⚠️ Switch Master/Slave Nodes?',
+                '⚠️',
+                `<p><strong>You are about to trigger a FAILOVER on a MASTER node:</strong></p>
+                 <p><span class="node-address">${{nodeAddress}}</span></p>
+                 <p style="color: #dc3545; font-weight: 500;">This will promote one of its replicas to master!</p>
+                 <p style="margin-top: 15px;"><strong>Impact:</strong></p>
+                 <ul>
+                     <li>Brief service interruption for keys on this shard</li>
+                     <li>Cluster topology will change</li>
+                     <li>Connected clients will be disconnected</li>
+                 </ul>
+                 <p style="margin-top: 10px;">Are you sure you want to continue?</p>`,
+                '🔄 Confirm Failover',
+                function() {{
+                    const params = new URLSearchParams(formData).toString();
+                    document.getElementById('switch-master-slave-result').innerHTML = "<p>Processing request...</p>";
+                    fetch('/manager/switch-master-slave/?' + params)
+                        .then(response => response.text())
+                        .then(data => {{
+                            document.getElementById('switch-master-slave-result').innerHTML = data;
+                        }})
+                        .catch(error => {{
+                            document.getElementById('switch-master-slave-result').innerHTML = "<p style='color: red;'>Error switching master/slave: " + error + "</p>";
+                        }});
+                }},
+                true  // isDanger
+            );
         }}
 
         function changeConfig(event) {{
@@ -2829,6 +2846,71 @@ async def manager():
                     spinner.style.display = 'none';
                 }});
         }}
+    </script>
+
+    <!-- Generic Confirmation Modal -->
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-dialog">
+            <div id="confirm-modal-header" class="modal-header">
+                <span id="confirm-modal-icon" class="modal-icon">⚠️</span>
+                <h3 id="confirm-modal-title">Confirm Action</h3>
+            </div>
+            <div class="modal-body">
+                <div id="confirm-modal-body"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-cancel" onclick="closeConfirmModal()">Cancel</button>
+                <button id="confirm-modal-btn" class="modal-btn modal-btn-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pendingConfirmCallback = null;
+
+        function showConfirmModal(title, icon, content, confirmBtnText, confirmCallback, isDanger = false) {{
+            pendingConfirmCallback = confirmCallback;
+            document.getElementById('confirm-modal-icon').textContent = icon;
+            document.getElementById('confirm-modal-title').textContent = title;
+            document.getElementById('confirm-modal-body').innerHTML = content;
+            const confirmBtn = document.getElementById('confirm-modal-btn');
+            confirmBtn.textContent = confirmBtnText;
+            const header = document.getElementById('confirm-modal-header');
+            if (isDanger) {{
+                header.className = 'modal-header danger';
+                confirmBtn.className = 'modal-btn modal-btn-confirm danger';
+            }} else {{
+                header.className = 'modal-header warning';
+                confirmBtn.className = 'modal-btn modal-btn-confirm';
+            }}
+            document.getElementById('confirm-modal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }}
+
+        function closeConfirmModal() {{
+            document.getElementById('confirm-modal').classList.remove('active');
+            document.body.style.overflow = '';
+            pendingConfirmCallback = null;
+        }}
+
+        function executeConfirmAction() {{
+            if (pendingConfirmCallback) {{
+                const cb = pendingConfirmCallback;
+                closeConfirmModal();
+                cb();
+            }}
+        }}
+
+        document.getElementById('confirm-modal-btn').addEventListener('click', executeConfirmAction);
+        document.getElementById('confirm-modal').addEventListener('click', function(e) {{
+            if (e.target === this) closeConfirmModal();
+        }});
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                const m = document.getElementById('confirm-modal');
+                if (m && m.classList.contains('active')) closeConfirmModal();
+            }}
+        }});
     </script>
     </body>
     </html>
