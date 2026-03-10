@@ -13,12 +13,23 @@ from pareFunc import *
 from pareFuncWeb import *
 
 from fastapi import *
-from fastapi.responses import HTMLResponse  # Import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from subprocess import getstatusoutput
 from time import sleep  # Import sleep
+from contextlib import asynccontextmanager
+import pareAuth
+
+@asynccontextmanager
+async def _lifespan(app):
+    pwd = pareAuth.init_auth()
+    bar = "═" * 52
+    print(f"\n{bar}")
+    print(f"  🔑  Session password: {pwd}")
+    print(f"{bar}\n")
+    yield
 
 # Create an instance of FastAPI
-app = FastAPI()
+app = FastAPI(lifespan=_lifespan)
 router = APIRouter()
 
 @app.middleware("http")
@@ -27,6 +38,13 @@ async def reload_nodes_middleware(request, call_next):
     Middleware that reloads the pareNodes configuration before processing certain paths.
     This ensures the UI always shows the latest node configuration.
     """
+    # ── Auth gate ───────────────────────────────────────────────────────────
+    _open = {"/login", "/favicon.ico"}
+    if request.url.path not in _open:
+        _tok = request.cookies.get("pare_session")
+        if not pareAuth.check_session(_tok):
+            return RedirectResponse(url="/login", status_code=302)
+
     # List of paths that should trigger a configuration reload
     reload_paths = [
         "/monitor",  # Added main monitor page
@@ -5586,6 +5604,108 @@ async def maker_create_cluster(
             </div>
             """
         )
+
+
+# ─── Auth Endpoints ───────────────────────────────────────────────────────────
+
+def _login_html(locked: bool = False) -> str:
+    if locked:
+        body = (
+            '<div class="lock-msg">'
+            '<div class="lock-icon">&#128274;</div>'
+            '<h3>Application Locked</h3>'
+            '<p>Too many failed login attempts.</p>'
+            '<p style="margin-top:8px;font-size:12px;color:#888">'
+            'Restart the server to unlock.</p></div>'
+        )
+    else:
+        body = (
+            '<div id="err" class="err-box" style="display:none"></div>'
+            '<form onsubmit="doLogin(event)">'
+            '<input id="pwd" type="password" placeholder="Session password"'
+            ' autocomplete="off" autofocus/>'
+            '<button type="submit">Login &#8594;</button>'
+            '</form>'
+            '<script>'
+            'async function doLogin(e){'
+            'e.preventDefault();'
+            'var r=await fetch("/login",{method:"POST",'
+            'headers:{"Content-Type":"application/json"},'
+            'body:JSON.stringify({password:document.getElementById("pwd").value})});'
+            'var d=await r.json();'
+            'if(d.ok){window.location.href="/";return;}'
+            'var b=document.getElementById("err");'
+            'if(d.reason==="LOCKED"||d.attempts_left===0){'
+            'b.innerHTML="&#128274; Application locked. Restart the server to unlock.";'
+            'document.querySelector("form").style.display="none";'
+            '}else if(d.reason==="MAX_SESSIONS"){'
+            'b.innerHTML="&#9888; Maximum sessions (2) reached. Try again later.";'
+            '}else{'
+            'b.innerHTML="&#9888; Wrong password. "+d.attempts_left+" attempt(s) left.";'
+            '}'
+            'b.style.display="block";'
+            'document.getElementById("pwd").value="";}'
+            '</script>'
+        )
+    return (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>'
+        '<title>Paredicma \u2013 Login</title><style>'
+        '*{box-sizing:border-box;margin:0;padding:0}'
+        'body{font-family:"Segoe UI",sans-serif;background:#1a1a2e;color:#eee;'
+        'display:flex;justify-content:center;align-items:center;min-height:100vh}'
+        '.card{background:#16213e;padding:36px 40px;border-radius:12px;width:340px;'
+        'box-shadow:0 8px 32px rgba(0,0,0,.6)}'
+        'h2{color:#e94560;text-align:center;margin-bottom:4px;font-size:22px}'
+        '.sub{color:#888;text-align:center;font-size:12px;margin-bottom:24px}'
+        'input[type=password]{width:100%;padding:10px 14px;background:#0f3460;'
+        'border:1px solid #2a4a80;border-radius:7px;color:#fff;font-size:14px;margin-bottom:12px}'
+        'input[type=password]:focus{outline:none;border-color:#e94560}'
+        'button{width:100%;padding:11px;background:#e94560;color:#fff;border:none;'
+        'border-radius:7px;font-size:14px;cursor:pointer;font-weight:600}'
+        'button:hover{background:#c73652}'
+        '.err-box{background:#3a1a1a;border:1px solid #e94560;border-radius:7px;'
+        'padding:10px 14px;margin-bottom:14px;font-size:13px;color:#f88}'
+        '.lock-msg{text-align:center;padding:12px 0}'
+        '.lock-icon{font-size:48px;margin-bottom:12px}'
+        '.lock-msg h3{color:#e94560;margin-bottom:8px}'
+        '</style></head><body><div class="card">'
+        '<h2>Paredicma</h2>'
+        '<p class="sub">Redis Cluster Management</p>'
+        + body +
+        '</div></body></html>'
+    )
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    token = request.cookies.get("pare_session")
+    if pareAuth.check_session(token):
+        return RedirectResponse(url="/", status_code=302)
+    return HTMLResponse(content=_login_html(locked=pareAuth.is_locked()))
+
+
+@app.post("/login")
+async def login_post(request: Request):
+    try:
+        body = await request.json()
+        password = str(body.get("password", ""))
+    except Exception:
+        return JSONResponse({"ok": False, "reason": "INVALID", "attempts_left": pareAuth.attempts_left()})
+    success, result = pareAuth.do_login(password)
+    if success:
+        resp = JSONResponse({"ok": True})
+        resp.set_cookie("pare_session", result, httponly=True, samesite="strict")
+        return resp
+    return JSONResponse({"ok": False, "reason": result, "attempts_left": pareAuth.attempts_left()})
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    token = request.cookies.get("pare_session")
+    pareAuth.do_logout(token)
+    resp = RedirectResponse(url="/login", status_code=302)
+    resp.delete_cookie("pare_session")
+    return resp
 
 
 # ─── AI Endpoints ─────────────────────────────────────────────────────────────
