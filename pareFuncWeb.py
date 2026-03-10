@@ -3995,17 +3995,17 @@ def ai_cluster_health_wv() -> str:
                 parts = []
                 for r in m["replicas"]:
                     same = r["server_ip"] == m["server_ip"]
-                    col = "orange" if same else "green"
+                    cls = "ai-rep-same" if same else "ai-rep-diff"
                     note = " (same server!)" if same else " (diff server OK)"
                     parts.append(
-                        '<span style="color:' + col + '"><b>' + r["address"] + '</b>' + note + '</span>'
+                        '<span class="' + cls + '"><b>' + r["address"] + '</b>' + note + '</span>'
                     )
                 rep_html = "<br>".join(parts)
             rows += (
                 "<tr>"
-                + '<td style="padding:6px 10px;border-bottom:1px solid #ddd;font-weight:bold">' + m["address"] + "</td>"
-                + '<td style="padding:6px 10px;border-bottom:1px solid #ddd">' + m["server_ip"] + "</td>"
-                + '<td style="padding:6px 10px;border-bottom:1px solid #ddd">' + rep_html + "</td>"
+                + '<td class="ai-td-bold">' + m["address"] + "</td>"
+                + '<td class="ai-td">' + m["server_ip"] + "</td>"
+                + '<td class="ai-td">' + rep_html + "</td>"
                 + "</tr>"
             )
 
@@ -4018,34 +4018,33 @@ def ai_cluster_health_wv() -> str:
             )
             down_html = '<div class="error-box"><strong>Down Nodes:</strong><ul>' + items + '</ul></div>'
 
-        # Status color based on AI assessment
+        # Status level based on AI assessment
         au = analysis.upper()
         if "CRITICAL" in au:
-            sc, sb = "#b71c1c", "#ffebee"
+            level = "critical"
         elif "WARNING" in au:
-            sc, sb = "#e65100", "#fff3e0"
+            level = "warning"
         else:
-            sc, sb = "#1b5e20", "#e8f5e9"
+            level = "ok"
 
         html = '<div style="margin-top:10px">'
         html += "<h4>Cluster Topology (Master / Replica Map)</h4>"
         html += '<table style="width:100%;border-collapse:collapse;margin-bottom:12px">'
         html += (
-            '<thead><tr style="background:#f0f0f0">'
-            + '<th style="padding:8px 10px;border-bottom:2px solid #ddd;text-align:left">Master Node</th>'
-            + '<th style="padding:8px 10px;border-bottom:2px solid #ddd;text-align:left">Server IP</th>'
-            + '<th style="padding:8px 10px;border-bottom:2px solid #ddd;text-align:left">Replicas &amp; Server Location</th>'
+            '<thead class="ai-topo-thead"><tr>'
+            + '<th class="ai-th">Master Node</th>'
+            + '<th class="ai-th">Server IP</th>'
+            + '<th class="ai-th">Replicas &amp; Server Location</th>'
             + "</tr></thead>"
         )
         html += "<tbody>" + rows + "</tbody></table>"
         html += down_html
         html += "<h4>AI Health Assessment</h4>"
         html += (
-            '<div style="background:' + sb + ';border-left:4px solid ' + sc
-            + ';padding:12px 16px;border-radius:4px;white-space:pre-wrap;font-family:monospace;font-size:0.9em">'
+            '<div class="ai-result-box ai-result-' + level + '">'
             + analysis + '</div>'
         )
-        html += '<p style="color:#888;font-size:0.8em;margin-top:6px">Model: ' + model_used + '</p>'
+        html += '<p class="ai-model-note">Model: ' + model_used + '</p>'
         html += "</div>"
         return html
 
@@ -4073,24 +4072,23 @@ def ai_log_analysis_wv(redisNode: str, line_count: int = 200) -> str:
 
         au = analysis.upper()
         if "CRITICAL" in au:
-            sc, sb = "#b71c1c", "#ffebee"
+            level = "critical"
         elif "WARNING" in au:
-            sc, sb = "#e65100", "#fff3e0"
+            level = "warning"
         else:
-            sc, sb = "#1b5e20", "#e8f5e9"
+            level = "ok"
 
         html = '<div style="margin-top:10px">'
         html += "<h4>AI Log Analysis</h4>"
         html += (
-            '<p style="color:#666;font-size:0.9em">Analyzed last '
+            '<p class="ai-node-note">Analyzed last '
             + str(lines_checked) + ' log lines from node ' + redisNode + '</p>'
         )
         html += (
-            '<div style="background:' + sb + ';border-left:4px solid ' + sc
-            + ';padding:12px 16px;border-radius:4px;white-space:pre-wrap;font-family:monospace;font-size:0.9em">'
+            '<div class="ai-result-box ai-result-' + level + '">'
             + analysis + '</div>'
         )
-        html += '<p style="color:#888;font-size:0.8em;margin-top:6px">Model: ' + model_used + '</p>'
+        html += '<p class="ai-model-note">Model: ' + model_used + '</p>'
         html += "</div>"
         return html
 

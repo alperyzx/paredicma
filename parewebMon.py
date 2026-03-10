@@ -415,6 +415,28 @@ def list_nodes():
                 color: #aaa;
             }}
         }}
+        html[data-theme="dark"] .node-card {{ background: #1e1e1e; border-color: #444; }}
+        html[data-theme="dark"] .master-header {{ background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); }}
+        html[data-theme="dark"] .replicas-container {{ background: #252525; }}
+        html[data-theme="dark"] .replica-row {{ background: #1e1e1e; border-color: #444; }}
+        html[data-theme="dark"] .replica-id {{ color: #aaa; }}
+        html[data-theme="dark"] .no-replicas {{ color: #777; }}
+        html[data-theme="dark"] .down-section {{ background: #2d1a1a; border-color: #5c2828; }}
+        html[data-theme="dark"] .unknown-section {{ background: #252525; border-color: #444; }}
+        html[data-theme="dark"] .down-node, html[data-theme="dark"] .unknown-node {{ background: #1e1e1e; }}
+        html[data-theme="dark"] .summary-bar {{ background: #1a3a5c; }}
+        html[data-theme="dark"] .summary-label {{ color: #aaa; }}
+        html[data-theme="light"] .node-card {{ background: #fff !important; border-color: #ddd !important; }}
+        html[data-theme="light"] .master-header {{ background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important; }}
+        html[data-theme="light"] .replicas-container {{ background: #f9f9f9 !important; }}
+        html[data-theme="light"] .replica-row {{ background: #fff !important; border-color: #e0e0e0 !important; }}
+        html[data-theme="light"] .replica-id {{ color: #666 !important; }}
+        html[data-theme="light"] .no-replicas {{ color: #999 !important; }}
+        html[data-theme="light"] .down-section {{ background: #ffebee !important; border-color: #ffcdd2 !important; }}
+        html[data-theme="light"] .unknown-section {{ background: #f5f5f5 !important; border-color: #e0e0e0 !important; }}
+        html[data-theme="light"] .down-node, html[data-theme="light"] .unknown-node {{ background: #fff !important; }}
+        html[data-theme="light"] .summary-bar {{ background: #e3f2fd !important; }}
+        html[data-theme="light"] .summary-label {{ color: #666 !important; }}
     </style>
     <html>
     <title>Node List</title>
@@ -1709,8 +1731,256 @@ css_style = """
                 background-color: #555;
             }
         }
+        /* ── Theme Toggle Button ─────────────────────────────────────────── */
+        #theme-toggle {
+            padding: 4px 13px; font-size: 13px; border-radius: 20px;
+            border: 1px solid #aaa; background: transparent; cursor: pointer;
+            color: inherit; opacity: 0.7; transition: opacity 0.2s;
+        }
+        #theme-toggle:hover { opacity: 1; }
+        /* ── Manual Dark Theme ───────────────────────────────────────────── */
+        html[data-theme="dark"] body { background-color: #121212; color: #e0e0e0; margin: 20px auto; max-width: 800px; padding: 0 20px; }
+        html[data-theme="dark"] h1 { color: #bce1f2; }
+        html[data-theme="dark"] .monitor-title { background-color: #5a5a5a; }
+        html[data-theme="dark"] .manager-title { background-color: #002b55; }
+        html[data-theme="dark"] .maintenance-title { background-color: #990000; }
+        html[data-theme="dark"] table { border-collapse: collapse; }
+        html[data-theme="dark"] th { border-bottom: 1px solid #444; color: #f1f1f1; }
+        html[data-theme="dark"] td { border-bottom: 1px solid #333; }
+        html[data-theme="dark"] tr[style*="background-color:#d3ffce"] { background-color: #2a4d2a !important; }
+        html[data-theme="dark"] tr[style*="background-color:yellow"] { background-color: #666600 !important; }
+        html[data-theme="dark"] tr[style*="background-color:red"] { background-color: #660000 !important; }
+        html[data-theme="dark"] input[type="text"],
+        html[data-theme="dark"] input[type="number"],
+        html[data-theme="dark"] select { background-color: #333333; color: #e0e0e0; border: 1px solid #555555; }
+        html[data-theme="dark"] .monitor-button, html[data-theme="dark"] .monitor-nav { background-color: #5a5a5a; }
+        html[data-theme="dark"] .monitor-button:hover, html[data-theme="dark"] .monitor-nav:hover { background-color: #6a6a6a; }
+        html[data-theme="dark"] .manager-button, html[data-theme="dark"] .manager-nav { background-color: #002b55; }
+        html[data-theme="dark"] .manager-button:hover, html[data-theme="dark"] .manager-nav:hover { background-color: #003f7c; }
+        html[data-theme="dark"] .maintenance-button, html[data-theme="dark"] .maintenance-nav { background-color: #990000; }
+        html[data-theme="dark"] .maintenance-button:hover, html[data-theme="dark"] .maintenance-nav:hover { background-color: #b30000; }
+        html[data-theme="dark"] .card-button { background-color: #666; }
+        html[data-theme="dark"] .card-button:hover { background-color: #777; }
+        html[data-theme="dark"] .confirm-btn { background-color: #b33c38; }
+        html[data-theme="dark"] .confirm-btn:hover { background-color: #c7433e; }
+        html[data-theme="dark"] .cancel-btn { background-color: #4694b0; }
+        html[data-theme="dark"] .cancel-btn:hover { background-color: #5aa6c2; }
+        html[data-theme="dark"] .btn-disabled { background-color: #555; }
+        html[data-theme="dark"] .collapsible { background-color: #2a2a2a; color: #ccc; }
+        html[data-theme="dark"] .active, html[data-theme="dark"] .collapsible:hover { background-color: #383838; }
+        html[data-theme="dark"] .content { background-color: #1e1e1e; border: 1px solid #444; }
+        html[data-theme="dark"] hr { background: #444; }
+        html[data-theme="dark"] pre { background-color: #2a2a2a; color: #ccc; border: 1px solid #444; }
+        html[data-theme="dark"] .welcome-header h1 { color: #e0e0e0; }
+        html[data-theme="dark"] .welcome-description { color: #aaa; }
+        html[data-theme="dark"] .section-card { background-color: #1e1e1e; border-color: #444; }
+        html[data-theme="dark"] .card-content { color: #bbb; }
+        html[data-theme="dark"] .card-footer { border-top-color: #444; }
+        html[data-theme="dark"] .welcome-footer { color: #888; }
+        html[data-theme="dark"] .confirmation-needed { border-color: #b38600; background-color: #332a1a; color: #ffdead; }
+        html[data-theme="dark"] .delete-result { border-color: #3c763d; background-color: #1e351e; color: #90ee90; }
+        html[data-theme="dark"] .error-message { border-color: #d9534f; background-color: #351e1e; color: #f08080; }
+        html[data-theme="dark"] .error-message pre { background-color: #2a2a2a; color: #ccc; }
+        html[data-theme="dark"] .response-container { background-color: #1e1e1e; border-color: #444; color: #e0e0e0; }
+        html[data-theme="dark"] .response-container h3 { color: #f1f1f1; }
+        html[data-theme="dark"] .response-container p,
+        html[data-theme="dark"] .response-container div,
+        html[data-theme="dark"] .response-container span,
+        html[data-theme="dark"] .response-container b,
+        html[data-theme="dark"] .response-container i { color: inherit; }
+        html[data-theme="dark"] .response-container pre { background-color: #2a2a2a; color: #ccc; border: 1px solid #444; }
+        html[data-theme="dark"] .response-container code { background-color: #333; color: #ff8080; }
+        html[data-theme="dark"] [style*="color: #001f3f"] { color: #4a9cf7 !important; }
+        html[data-theme="dark"] .info-box { background-color: #1a3a5c; border-left-color: #4dabf7; color: #e0e0e0; }
+        html[data-theme="dark"] .info-box .note { color: #aaa; }
+        html[data-theme="dark"] .error-box { background-color: #4a1a1a; border-left-color: #ff6b6b; color: #f0a0a0; }
+        html[data-theme="dark"] .warning-box { background-color: #4a3a1a; border-left-color: #ffa500; color: #ffe0a0; }
+        html[data-theme="dark"] .note-box { background-color: #4a3a1a; border-left-color: #ffc107; color: #ffe0a0; }
+        html[data-theme="dark"] .table-header { background-color: #2a2a2a; }
+        html[data-theme="dark"] .table-header th { border-color: #444; color: #e0e0e0; }
+        html[data-theme="dark"] .success-box { background-color: #1a4a2a; border-left-color: #28a745; color: #a0f0a0; }
+        html[data-theme="dark"] .log-pre { background-color: #2a2a2a; color: #ccc; border: 1px solid #444; }
+        html[data-theme="dark"] .cluster-info-table th { background-color: #333; }
+        html[data-theme="dark"] .cluster-info-table tr:nth-child(even) { background-color: #222; }
+        html[data-theme="dark"] .cluster-info-table tr:hover { background-color: #444; }
+        html[data-theme="dark"] .cluster-info-table th,
+        html[data-theme="dark"] .cluster-info-table td { border: 1px solid #444; }
+        html[data-theme="dark"] .node-id { background-color: #333; border: 1px solid #555; }
+        html[data-theme="dark"] .master-node { color: #4a9cf7; }
+        html[data-theme="dark"] .slave-node { color: #b3c9e6; }
+        html[data-theme="dark"] .cluster-check { background-color: #222; border: 1px solid #444; }
+        html[data-theme="dark"] .help-info { background-color: #222; border-left: 4px solid #555; }
+        html[data-theme="dark"] .section-title { border-bottom: 1px solid #444; }
+        html[data-theme="dark"] .progress-bar-container { background-color: #444; }
+        html[data-theme="dark"] .progress-bar { background-color: #990000; }
+        html[data-theme="dark"] .version-master-row { background-color: rgba(33,150,243,0.25); }
+        html[data-theme="dark"] .version-master-row td { color: #64b5f6; }
+        html[data-theme="dark"] .version-replica-row { background-color: rgba(76,175,80,0.15); }
+        html[data-theme="dark"] .version-replica-row td { color: #81c784; }
+        html[data-theme="dark"] .restart-tooltip { background-color: #1e1e1e; border: 1px solid #444; }
+        html[data-theme="dark"] .restart-tooltip::after { border-color: #1e1e1e transparent transparent transparent; }
+        html[data-theme="dark"] .restart-btn { background-color: #990000; }
+        html[data-theme="dark"] .restart-btn:hover { background-color: #b30000; }
+        html[data-theme="dark"] .modal-dialog { background-color: #252525; }
+        html[data-theme="dark"] .modal-header { border-bottom-color: #444; }
+        html[data-theme="dark"] .modal-header h3 { color: #e0e0e0; }
+        html[data-theme="dark"] .modal-header.warning { background-color: #3a2800; border-bottom-color: #b38600; }
+        html[data-theme="dark"] .modal-header.warning h3 { color: #ffd166; }
+        html[data-theme="dark"] .modal-header.danger { background-color: #3a1212; border-bottom-color: #dc3545; }
+        html[data-theme="dark"] .modal-header.danger h3 { color: #ff8080; }
+        html[data-theme="dark"] .modal-body { color: #ccc; }
+        html[data-theme="dark"] .modal-footer { background-color: #252525; border-top-color: #444; }
+        html[data-theme="dark"] .modal-btn-cancel { background-color: #444; color: #e0e0e0; }
+        html[data-theme="dark"] .modal-btn-cancel:hover { background-color: #555; }
+        /* ── Manual Light Theme (overrides system dark) ──────────────────── */
+        html[data-theme="light"] body { background-color: #f0f0f0 !important; color: #333333 !important; }
+        html[data-theme="light"] h1 { color: #ffffff !important; }
+        html[data-theme="light"] .monitor-title { background-color: #4f4f4f !important; }
+        html[data-theme="light"] .manager-title { background-color: #001f3f !important; }
+        html[data-theme="light"] .maintenance-title { background-color: #800000 !important; }
+        html[data-theme="light"] th { border-bottom: 1px solid #ddd !important; color: inherit !important; }
+        html[data-theme="light"] td { border-bottom: 1px solid #eee !important; }
+        html[data-theme="light"] tr[style*="background-color:#d3ffce"] { background-color: #d3ffce !important; }
+        html[data-theme="light"] tr[style*="background-color:yellow"] { background-color: yellow !important; }
+        html[data-theme="light"] tr[style*="background-color:red"] { background-color: red !important; }
+        html[data-theme="light"] input[type="text"],
+        html[data-theme="light"] input[type="number"],
+        html[data-theme="light"] select { background-color: #ffffff !important; color: #333333 !important; border: 1px solid #cccccc !important; }
+        html[data-theme="light"] .monitor-button, html[data-theme="light"] .monitor-nav { background-color: #4f4f4f !important; }
+        html[data-theme="light"] .monitor-button:hover, html[data-theme="light"] .monitor-nav:hover { background-color: #3f3f3f !important; }
+        html[data-theme="light"] .manager-button, html[data-theme="light"] .manager-nav { background-color: #001f3f !important; }
+        html[data-theme="light"] .manager-button:hover, html[data-theme="light"] .manager-nav:hover { background-color: #001a35 !important; }
+        html[data-theme="light"] .maintenance-button, html[data-theme="light"] .maintenance-nav { background-color: #800000 !important; }
+        html[data-theme="light"] .maintenance-button:hover, html[data-theme="light"] .maintenance-nav:hover { background-color: #660000 !important; }
+        html[data-theme="light"] .card-button { background-color: #555 !important; }
+        html[data-theme="light"] .card-button:hover { background-color: #444 !important; }
+        html[data-theme="light"] .confirm-btn { background-color: #d9534f !important; }
+        html[data-theme="light"] .cancel-btn { background-color: #5bc0de !important; }
+        html[data-theme="light"] .btn-disabled { background-color: #aaa !important; }
+        html[data-theme="light"] .collapsible { background-color: #e7e7e7 !important; color: #444 !important; }
+        html[data-theme="light"] .active, html[data-theme="light"] .collapsible:hover { background-color: #ddd !important; }
+        html[data-theme="light"] .content { background-color: #f9f9f9 !important; border: 1px solid #ddd !important; }
+        html[data-theme="light"] hr { background: #ccc !important; }
+        html[data-theme="light"] pre { background-color: #eee !important; color: #333 !important; border: none !important; }
+        html[data-theme="light"] .welcome-header h1 { color: #333 !important; }
+        html[data-theme="light"] .welcome-description { color: #666 !important; }
+        html[data-theme="light"] .section-card { background-color: #fff !important; border-color: #ddd !important; }
+        html[data-theme="light"] .card-content { color: #555 !important; }
+        html[data-theme="light"] .card-footer { border-top-color: #eee !important; }
+        html[data-theme="light"] .welcome-footer { color: #777 !important; }
+        html[data-theme="light"] .confirmation-needed { border-color: #f0ad4e !important; background-color: #fcf8e3 !important; color: #8a6d3b !important; }
+        html[data-theme="light"] .delete-result { border-color: #5cb85c !important; background-color: #dff0d8 !important; color: #3c763d !important; }
+        html[data-theme="light"] .error-message { border-color: #d9534f !important; background-color: #f2dede !important; color: #a94442 !important; }
+        html[data-theme="light"] .error-message pre { background-color: #f8f8f8 !important; color: #333 !important; }
+        html[data-theme="light"] .response-container { background-color: #f9f9f9 !important; border-color: #ddd !important; color: #333333 !important; }
+        html[data-theme="light"] .response-container h3 { color: #333 !important; }
+        html[data-theme="light"] .response-container pre { background-color: #eee !important; color: #333 !important; border: none !important; }
+        html[data-theme="light"] .response-container code { background-color: #eee !important; color: #c7254e !important; }
+        html[data-theme="light"] [style*="color: #001f3f"] { color: #001f3f !important; }
+        html[data-theme="light"] .info-box { background-color: #e7f3ff !important; border-left-color: #2196F3 !important; color: inherit !important; }
+        html[data-theme="light"] .info-box .note { color: #666 !important; }
+        html[data-theme="light"] .error-box { background-color: #f8d7da !important; border-left-color: red !important; color: inherit !important; }
+        html[data-theme="light"] .warning-box { background-color: #fff3cd !important; border-left-color: orange !important; color: inherit !important; }
+        html[data-theme="light"] .note-box { background-color: #fff3cd !important; border-left-color: #ffc107 !important; color: inherit !important; }
+        html[data-theme="light"] .table-header { background-color: #f5f5f5 !important; }
+        html[data-theme="light"] .table-header th { border-color: #ddd !important; color: inherit !important; }
+        html[data-theme="light"] .success-box { background-color: #d4edda !important; border-left-color: #28a745 !important; color: inherit !important; }
+        html[data-theme="light"] .log-pre { background-color: #f8f9fa !important; color: inherit !important; }
+        html[data-theme="light"] .cluster-info-table th { background-color: #f2f2f2 !important; }
+        html[data-theme="light"] .node-id { background-color: #f8f8f8 !important; }
+        html[data-theme="light"] .master-node { color: #2c7be5 !important; }
+        html[data-theme="light"] .slave-node { color: #95aac9 !important; }
+        html[data-theme="light"] .cluster-check { background-color: #f9f9f9 !important; border: 1px solid #e9ecef !important; }
+        html[data-theme="light"] .help-info { background-color: #f8f9fa !important; border-left: 4px solid #6c757d !important; }
+        html[data-theme="light"] .section-title { border-bottom: 1px solid #e9ecef !important; }
+        html[data-theme="light"] .progress-bar-container { background-color: #e0e0e0 !important; }
+        html[data-theme="light"] .version-master-row { background-color: rgba(33,150,243,0.15) !important; }
+        html[data-theme="light"] .version-master-row td { color: #1565c0 !important; }
+        html[data-theme="light"] .version-replica-row { background-color: rgba(76,175,80,0.1) !important; }
+        html[data-theme="light"] .version-replica-row td { color: #2e7d32 !important; }
+        html[data-theme="light"] .restart-tooltip { background-color: #333 !important; }
+        html[data-theme="light"] .restart-tooltip::after { border-color: #333 transparent transparent transparent !important; }
+        html[data-theme="light"] .restart-btn { background-color: #800000 !important; }
+        html[data-theme="light"] .restart-btn:hover { background-color: #a00000 !important; }
+        html[data-theme="light"] .modal-dialog { background-color: #fff !important; }
+        html[data-theme="light"] .modal-header { border-bottom-color: #eee !important; }
+        html[data-theme="light"] .modal-header h3 { color: #333 !important; }
+        html[data-theme="light"] .modal-header.warning { background-color: #fff3cd !important; border-bottom-color: #ffc107 !important; }
+        html[data-theme="light"] .modal-header.warning h3 { color: #856404 !important; }
+        html[data-theme="light"] .modal-header.danger { background-color: #f8d7da !important; border-bottom-color: #dc3545 !important; }
+        html[data-theme="light"] .modal-header.danger h3 { color: #721c24 !important; }
+        html[data-theme="light"] .modal-body { color: #555 !important; }
+        html[data-theme="light"] .modal-footer { background-color: #f8f9fa !important; border-top-color: #eee !important; }
+        html[data-theme="light"] .modal-btn-cancel { background-color: #6c757d !important; color: #fff !important; }
+        /* ── AI Section Styles ───────────────────────────────────────────── */
+        .ai-result-box { padding: 12px 16px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; font-size: 0.9em; border-left: 4px solid; }
+        .ai-result-critical { background: #ffebee; border-left-color: #b71c1c; color: #3a0000; }
+        .ai-result-warning  { background: #fff3e0; border-left-color: #e65100; color: #3a1400; }
+        .ai-result-ok       { background: #e8f5e9; border-left-color: #1b5e20; color: #062010; }
+        .ai-topo-thead tr   { background: #f0f0f0; }
+        .ai-th { padding: 8px 10px; border-bottom: 2px solid #ddd; text-align: left; }
+        .ai-td { padding: 6px 10px; border-bottom: 1px solid #ddd; }
+        .ai-td-bold { padding: 6px 10px; border-bottom: 1px solid #ddd; font-weight: bold; }
+        .ai-model-note { color: #888; font-size: 0.8em; margin-top: 6px; }
+        .ai-node-note  { color: #666; font-size: 0.9em; }
+        .ai-rep-same { color: #c85000; font-weight: bold; }
+        .ai-rep-diff { color: #2e7d32; }
+        @media (prefers-color-scheme: dark) {
+            .ai-result-critical { background: #4a0a0a; border-left-color: #ff6b6b; color: #ffcccc; }
+            .ai-result-warning  { background: #4a2a00; border-left-color: #ffa040; color: #ffe0b0; }
+            .ai-result-ok       { background: #0a2a10; border-left-color: #66bb6a; color: #b0f0b8; }
+            .ai-topo-thead tr   { background: #2a2a2a; }
+            .ai-th { border-bottom-color: #555; color: #e0e0e0; }
+            .ai-td { border-bottom-color: #333; }
+            .ai-model-note { color: #aaa; }
+            .ai-node-note  { color: #bbb; }
+            .ai-rep-same { color: #ffaa50; }
+            .ai-rep-diff { color: #66bb6a; }
+        }
+        html[data-theme="dark"] .ai-result-critical { background: #4a0a0a; border-left-color: #ff6b6b; color: #ffcccc; }
+        html[data-theme="dark"] .ai-result-warning  { background: #4a2a00; border-left-color: #ffa040; color: #ffe0b0; }
+        html[data-theme="dark"] .ai-result-ok       { background: #0a2a10; border-left-color: #66bb6a; color: #b0f0b8; }
+        html[data-theme="dark"] .ai-topo-thead tr   { background: #2a2a2a; }
+        html[data-theme="dark"] .ai-th              { border-bottom-color: #555; color: #e0e0e0; }
+        html[data-theme="dark"] .ai-td              { border-bottom-color: #333; }
+        html[data-theme="dark"] .ai-model-note      { color: #aaa; }
+        html[data-theme="dark"] .ai-node-note       { color: #bbb; }
+        html[data-theme="dark"] .ai-rep-same        { color: #ffaa50; }
+        html[data-theme="dark"] .ai-rep-diff        { color: #66bb6a; }
+        html[data-theme="light"] .ai-result-critical { background: #ffebee !important; border-left-color: #b71c1c !important; color: #3a0000 !important; }
+        html[data-theme="light"] .ai-result-warning  { background: #fff3e0 !important; border-left-color: #e65100 !important; color: #3a1400 !important; }
+        html[data-theme="light"] .ai-result-ok       { background: #e8f5e9 !important; border-left-color: #1b5e20 !important; color: #062010 !important; }
+        html[data-theme="light"] .ai-topo-thead tr   { background: #f0f0f0 !important; }
+        html[data-theme="light"] .ai-th              { border-bottom-color: #ddd !important; color: inherit !important; }
+        html[data-theme="light"] .ai-td              { border-bottom-color: #ddd !important; }
+        html[data-theme="light"] .ai-model-note      { color: #888 !important; }
+        html[data-theme="light"] .ai-node-note       { color: #666 !important; }
+        html[data-theme="light"] .ai-rep-same        { color: #c85000 !important; }
+        html[data-theme="light"] .ai-rep-diff        { color: #2e7d32 !important; }
     </style>
+<script>(function(){var t=localStorage.getItem('pareTheme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
 """
+
+# ── Theme toggle button (injected into every page body) ───────────────────────
+_theme_toggle_html = (
+    '<button id="theme-toggle" style="margin-left:auto" onclick="pareToggleTheme()" title="Auto (system) \u2014 click for Dark">\U0001f319</button>'
+    '<script>'
+    'function pareToggleTheme(){'
+    'var c=document.documentElement.getAttribute("data-theme")||"auto";'
+    'var n=c==="auto"?"dark":c==="dark"?"light":"auto";'
+    'if(n==="auto"){document.documentElement.removeAttribute("data-theme");localStorage.removeItem("pareTheme");}'
+    'else{document.documentElement.setAttribute("data-theme",n);localStorage.setItem("pareTheme",n);}'
+    'pareUpdateThemeIcon();}'
+    'function pareUpdateThemeIcon(){'
+    'var c=document.documentElement.getAttribute("data-theme")||"auto";'
+    'var b=document.getElementById("theme-toggle");if(!b)return;'
+    'if(c==="dark"){b.textContent="\u2600\ufe0f";b.title="Dark \u2014 click for Light";}'
+    'else if(c==="light"){b.textContent="\U0001f5a5";b.title="Light \u2014 click for Auto";}'
+    'else{b.textContent="\U0001f319";b.title="Auto (system) \u2014 click for Dark";}'
+    '}'
+    'document.addEventListener("DOMContentLoaded",pareUpdateThemeIcon);'
+    '</script>'
+)
 
 # Add a root route handler for the welcome page
 @app.get("/", response_class=HTMLResponse)
@@ -1735,7 +2005,7 @@ async def welcome_page():
                     Redis Cluster Management Tool
                 </div>
             </div>
-            
+            <div style="display:flex;justify-content:flex-end;margin:0 0 8px 0">{_theme_toggle_html}</div>
             <div class="section-cards">
                 <div class="section-card monitor-card">
                     <h2 class="card-header">Monitor</h2>
@@ -1824,6 +2094,7 @@ async def monitor():
     <div class="nav-buttons">
         <a href="/manager" class="manager-nav">Go to Manager</a>
         <a href="/maintain" class="maintenance-nav">Go to Maintenance</a>
+        {_theme_toggle_html}
     </div>
     <hr>
 
@@ -2133,6 +2404,7 @@ async def manager():
     <div class="nav-buttons">
         <a href="/monitor" class="monitor-nav">Go to Monitor</a>
         <a href="/maintain" class="maintenance-nav">Go to Maintenance</a>
+        {_theme_toggle_html}
     </div>
     <hr>
 
@@ -2771,6 +3043,7 @@ async def maintain():
     <div class="nav-buttons">
         <a href="/monitor" class="monitor-nav">Go to Monitor</a>
         <a href="/manager" class="manager-nav">Go to Manager</a>
+        {_theme_toggle_html}
     </div>
     <hr>
 
@@ -4981,6 +5254,7 @@ async def maker():
         <a href="/monitor" class="monitor-nav">Go to Monitor</a>
         <a href="/manager" class="manager-nav">Go to Manager</a>
         <a href="/maintain" class="maintenance-nav">Go to Maintenance</a>
+        {_theme_toggle_html}
     </div>
     <hr>
 
