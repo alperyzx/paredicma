@@ -2687,35 +2687,29 @@ async def manager():
             event.preventDefault();
             const formData = new FormData(document.getElementById('switch-master-slave-form'));
             const nodeAddress = formData.get('redisNode');
+            const resultDiv = document.getElementById('switch-master-slave-result');
 
-            showConfirmModal(
-                '⚠️ Switch Master/Slave Nodes?',
-                '⚠️',
-                `<p><strong>You are about to trigger a FAILOVER on a MASTER node:</strong></p>
-                 <p><span class="node-address">${{nodeAddress}}</span></p>
-                 <p style="color: #dc3545; font-weight: 500;">This will promote one of its replicas to master!</p>
-                 <p style="margin-top: 15px;"><strong>Impact:</strong></p>
-                 <ul>
-                     <li>Brief service interruption for keys on this shard</li>
-                     <li>Cluster topology will change</li>
-                     <li>Connected clients will be disconnected</li>
-                 </ul>
-                 <p style="margin-top: 10px;">Are you sure you want to continue?</p>`,
-                '🔄 Confirm Failover',
-                function() {{
-                    const params = new URLSearchParams(formData).toString();
-                    document.getElementById('switch-master-slave-result').innerHTML = "<p>Processing request...</p>";
-                    fetch('/manager/switch-master-slave/?' + params)
-                        .then(response => response.text())
-                        .then(data => {{
-                            document.getElementById('switch-master-slave-result').innerHTML = data;
-                        }})
-                        .catch(error => {{
-                            document.getElementById('switch-master-slave-result').innerHTML = "<p style='color: red;'>Error switching master/slave: " + error + "</p>";
-                        }});
-                }},
-                true  // isDanger
-            );
+            resultDiv.innerHTML = `
+                <div class="confirmation-needed" id="switch-confirmation-dialog">
+                    <p style="color: red; font-weight: bold;">Warning: You are about to trigger a FAILOVER on MASTER node (${{nodeAddress}})!</p>
+                    <p>One of its replicas will be promoted to master.</p>
+                    <p>Do you want to continue?</p>
+                    <button class="confirm-btn" id="switch-confirm-btn">Yes, Switch Master/Slave</button>
+                    <button class="cancel-btn" id="switch-cancel-btn">Cancel</button>
+                </div>`;
+
+            document.getElementById('switch-confirm-btn').addEventListener('click', function() {{
+                resultDiv.innerHTML = '<p>Processing request...</p>';
+                const params = new URLSearchParams(formData).toString();
+                fetch('/manager/switch-master-slave/?' + params)
+                    .then(response => response.text())
+                    .then(data => {{ resultDiv.innerHTML = data; }})
+                    .catch(error => {{ resultDiv.innerHTML = "<p style='color: red;'>Error switching master/slave: " + error + "</p>"; }});
+            }});
+
+            document.getElementById('switch-cancel-btn').addEventListener('click', function() {{
+                resultDiv.innerHTML = '<p>Operation cancelled.</p>';
+            }});
         }}
 
         function changeConfig(event) {{
