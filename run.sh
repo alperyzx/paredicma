@@ -184,8 +184,26 @@ else
     fi
 fi
 
-# Always choose the max python version available
-PYTHON_CMD=$(find_latest_python)
+# Choose Python command:
+# - If virtual environment is active, keep venv python
+# - Otherwise choose highest available system python
+if [[ -n "$VIRTUAL_ENV" ]]; then
+    PYTHON_CMD="python"
+else
+    PYTHON_CMD=$(find_latest_python)
+fi
+
+# Enforce minimum Python version required by this project
+if ! $PYTHON_CMD - <<'PY'
+import sys
+sys.exit(0 if sys.version_info >= (3, 8) else 1)
+PY
+then
+    detected_version=$($PYTHON_CMD --version 2>&1)
+    echo "Error: $detected_version detected. Paredicma requires Python 3.8 or higher." >&2
+    echo "Tip: set PYTHON_VERSION (e.g., PYTHON_VERSION=3.10 ./run.sh) or recreate .venv with newer Python." >&2
+    exit 1
+fi
 
 # Install packages if not using venv, or if venv was just created
 if [[ "$VIRTUAL_ENV" == "" || $venv_created -eq 1 ]]; then
