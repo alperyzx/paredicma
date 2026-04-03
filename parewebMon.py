@@ -748,64 +748,55 @@ async def show_memory_usage():
             port_number = pare_node[1][0]
             node_address = f"{node_ip}:{port_number}"
 
-            # Check SSH availability first
-            if is_ssh_available(node_ip):
-                isPing = pingredisNode(node_ip, port_number)
-                if isPing:
-                    mem_status, mem_response = subprocess.getstatusoutput(
-                        redisConnectCmd(node_ip, port_number, 'info memory | grep -e "used_memory:" -e "maxmemory:"')
-                    )
-                    if mem_status == 0:
-                        used_mem_byte = float(mem_response[12:mem_response.find('maxmemory:') - 1])
-                        max_mem_byte = float(mem_response[mem_response.find('maxmemory:') + 10:])
-                        used_mem_gb = round(used_mem_byte / (1024 * 1024 * 1024), 3)
-                        max_mem_gb = round(max_mem_byte / (1024 * 1024 * 1024), 3)
-                        usage_per_mem = round((used_mem_gb / max_mem_gb) * 100, 2)
+            isPing = pingredisNode(node_ip, port_number)
+            if isPing:
+                mem_status, mem_response = subprocess.getstatusoutput(
+                    redisConnectCmd(node_ip, port_number, 'info memory | grep -e "used_memory:" -e "maxmemory:"')
+                )
+                if mem_status == 0:
+                    used_mem_byte = float(mem_response[12:mem_response.find('maxmemory:') - 1])
+                    max_mem_byte = float(mem_response[mem_response.find('maxmemory:') + 10:])
+                    used_mem_gb = round(used_mem_byte / (1024 * 1024 * 1024), 3)
+                    max_mem_gb = round(max_mem_byte / (1024 * 1024 * 1024), 3)
+                    usage_per_mem = round((used_mem_gb / max_mem_gb) * 100, 2)
 
-                        is_master = isNodeMaster(node_ip, None, port_number)
-                        node_class = "master-node" if is_master else "slave-node"
+                    is_master = isNodeMaster(node_ip, None, port_number)
+                    node_class = "master-node" if is_master else "slave-node"
 
-                        # Determine usage level
-                        usage_class = "memory-usage-low" if usage_per_mem < 70 else \
-                                      "memory-usage-medium" if 70 <= usage_per_mem < 85 else \
-                                      "memory-usage-high"
+                    # Determine usage level
+                    usage_class = "memory-usage-low" if usage_per_mem < 70 else \
+                                  "memory-usage-medium" if 70 <= usage_per_mem < 85 else \
+                                  "memory-usage-high"
 
-                        # Create a visual meter for memory usage
-                        usage_meter = f"""
-                        <div class="meter">
-                            <div class="meter-fill" style="width: {usage_per_mem}%;"></div>
-                        </div>
-                        """
+                    # Create a visual meter for memory usage
+                    usage_meter = f"""
+                    <div class="meter">
+                        <div class="meter-fill" style="width: {usage_per_mem}%;"></div>
+                    </div>
+                    """
 
-                        node_info = f"""
-                        <tr class="{node_class}">
-                            <td>{node_address}</td>
-                            <td>{used_mem_gb} GB</td>
-                            <td>{max_mem_gb} GB</td>
-                            <td class="{usage_class}">{usage_per_mem}% {usage_meter}</td>
-                        </tr>
-                        """
-
-                        if is_master:
-                            master_nodes_info += node_info
-                            total_used_mem_byte += used_mem_byte
-                            total_max_mem_byte += max_mem_byte
-                        else:
-                            slave_nodes_info += node_info
-                    else:
-                        print(f"Error retrieving memory information for Node IP: {node_ip}, Port: {port_number}")
-                else:
-                    down_nodes_info += f"""
-                    <tr class="node-down">
+                    node_info = f"""
+                    <tr class="{node_class}">
                         <td>{node_address}</td>
-                        <td colspan="3">Node not responding</td>
+                        <td>{used_mem_gb} GB</td>
+                        <td>{max_mem_gb} GB</td>
+                        <td class="{usage_class}">{usage_per_mem}% {usage_meter}</td>
                     </tr>
                     """
+
+                    if is_master:
+                        master_nodes_info += node_info
+                        total_used_mem_byte += used_mem_byte
+                        total_max_mem_byte += max_mem_byte
+                    else:
+                        slave_nodes_info += node_info
+                else:
+                    print(f"Error retrieving memory information for Node IP: {node_ip}, Port: {port_number}")
             else:
                 down_nodes_info += f"""
                 <tr class="node-down">
                     <td>{node_address}</td>
-                    <td colspan="3">SSH unavailable</td>
+                    <td colspan="3">Node not responding</td>
                 </tr>
                 """
 
