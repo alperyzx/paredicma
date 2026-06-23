@@ -3238,9 +3238,13 @@ async def maintain():
     <div id="copy-binaries-container" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
         <h3>Deploy Redis Binary to Cluster Nodes</h3>
         <p>After successful compilation, copy the Redis binary to all nodes in your cluster:</p>
-        <div style="display: flex; align-items: center; gap: 15px;">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 15px;">
             <button id="copy-binaries-button" class="maintenance-button" onclick="copyRedisBinaries()">Copy Binary to All Nodes</button>
-                        <input type="text" id="redis_copy_version" placeholder="e.g., 7.2.4" style="width: 100px;">
+            <input type="text" id="redis_copy_version" placeholder="e.g., 7.2.4" style="width: 100px;">
+            <label style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                <input type="checkbox" id="compile_each_server_checkbox">
+                Compile on each server
+            </label>
         </div>
         <div id="copy-binaries-result" style="margin-top: 15px;"></div>
     </div>
@@ -4021,7 +4025,9 @@ async def maintain():
 
         function copyRedisBinaries() {{
             const versionInput = document.getElementById('redis_copy_version');
+            const compileEachServerInput = document.getElementById('compile_each_server_checkbox');
             const version = versionInput.value.trim();
+            const compileEachServer = compileEachServerInput.checked;
             
             // Basic validation
             if (!version) {{
@@ -4037,10 +4043,12 @@ async def maintain():
             }}
             
             // Show loading message
-            document.getElementById('copy-binaries-result').innerHTML = '<p>Copying Redis binary to all nodes in the cluster. Please wait...</p>';
+            document.getElementById('copy-binaries-result').innerHTML = compileEachServer
+                ? '<p>Compiling Redis on each server. Please wait...</p>'
+                : '<p>Copying the compiled Redis binary to all nodes in the cluster. Please wait...</p>';
             
             // Call the API endpoint
-            fetch(`/maintain/copy-redis-binaries/?redis_version=${{encodeURIComponent(version)}}`)
+            fetch(`/maintain/copy-redis-binaries/?redis_version=${{encodeURIComponent(version)}}&compile_each_server=${{compileEachServer}}`)
                 .then(response => response.text())
                 .then(html => {{
                     document.getElementById('copy-binaries-result').innerHTML = html;
@@ -5010,14 +5018,17 @@ async def maintain_extract_compile_redis(redis_tarfile: str = Query(..., title="
         return HTMLResponse(content=error_html, status_code=500)
 
 @app.get("/maintain/copy-redis-binaries/", response_class=HTMLResponse)
-async def maintain_copy_redis_binaries(redis_version: str = Query(..., title="Redis Version", description="The version of Redis to copy (e.g., 7.2.4)")):
+async def maintain_copy_redis_binaries(
+    redis_version: str = Query(..., title="Redis Version", description="The version of Redis to copy (e.g., 7.2.4)"),
+    compile_each_server: bool = Query(True, title="Compile Each Server", description="Compile Redis on each remote server instead of copying the compiled package")
+):
     """
     Endpoint to copy newly compiled Redis binaries to all nodes in the cluster.
     Calls the redisNewBinaryCopier_wv function.
     """
     try:
         # Call the function from pareFuncWeb.py
-        result_html = redisNewBinaryCopier_wv(redis_version)
+        result_html = redisNewBinaryCopier_wv(redis_version, compile_each_server=compile_each_server)
         # Return the HTML response
         return HTMLResponse(content=result_html)
     except Exception as e:

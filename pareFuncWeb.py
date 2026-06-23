@@ -2274,14 +2274,15 @@ def extract_compile_redis_wv(redis_tarfile):
 
 
 #step2 extract & compile
-def redisNewBinaryCopier_wv(redis_version):
+def redisNewBinaryCopier_wv(redis_version, compile_each_server=True):
     """
     Copies newly compiled Redis binaries to all servers in the cluster.
-    For local servers: copies binaries directly.
-    For remote servers: compiles Redis on the remote server to handle different architectures.
+    When compile_each_server is True, remote servers compile Redis from the tarball.
+    When compile_each_server is False, remote servers receive the compiled binary tree via rsync.
 
     Args:
         redis_version: The version of Redis to copy (e.g., 7.2.4)
+        compile_each_server: Whether to compile Redis on each remote server
 
     Returns:
         HTML-formatted result of the operation
@@ -2301,8 +2302,8 @@ def redisNewBinaryCopier_wv(redis_version):
         source_dir = f"{redisBinaryBase}redis-{redis_version}/"
         tar_file = f"redis-{redis_version}.tar.gz"
 
-        # Check if the source directory exists (local compilation)
-        if not os.path.exists(source_dir):
+        # Copy mode requires the compiled binary tree to exist locally.
+        if not compile_each_server and not os.path.exists(source_dir):
             return f"""
             <div class="error-message">
                 <p style="color: orange; font-weight: bold;">Source Directory Not Found</p>
@@ -2318,6 +2319,7 @@ def redisNewBinaryCopier_wv(redis_version):
         failed_copies = 0
         skipped_servers = 0
         remote_compiled = 0
+        remote_copied = 0
 
         # Collect unique server IPs to avoid redundant copying
         unique_servers = set()
@@ -2340,7 +2342,7 @@ def redisNewBinaryCopier_wv(redis_version):
             results.append(f"<p>⏭️ Skipping local server {server_ip} - binaries already compiled locally</p>")
             skipped_servers += 1
 
-        # Handle remote servers - need to compile on remote due to architecture differences
+        # Handle remote servers
         for server_ip in remote_servers:
             # Check if server is reachable
             if not pingServer(server_ip):
@@ -2348,13 +2350,17 @@ def redisNewBinaryCopier_wv(redis_version):
                 failed_copies += 1
                 continue
 
-            # Check if tar file exists locally
-            if os.path.isfile(tar_file):
+            if compile_each_server:
                 # Compile on remote server (handles different CPU architectures)
+                if not os.path.isfile(tar_file):
+                    results.append(f"<p style='color: red;'>❌ Redis tarball not found locally: {tar_file}</p>")
+                    failed_copies += 1
+                    continue
+
                 results.append(f"<p>🔧 Compiling Redis {redis_version} on remote server {server_ip}...</p>")
-                
+
                 compile_result = compile_redis_remote_wv(server_ip, tar_file, redis_version)
-                
+
                 if compile_result['success']:
                     results.append(f"<p style='color: green;'>✅ Successfully compiled Redis {redis_version} on {server_ip}</p>")
                     successful_copies += 1
@@ -2363,10 +2369,9 @@ def redisNewBinaryCopier_wv(redis_version):
                     results.append(f"<p style='color: red;'>❌ Failed to compile Redis {redis_version} on {server_ip}: {compile_result.get('message', 'Unknown error')}</p>")
                     failed_copies += 1
             else:
-                # Fallback: try to copy binaries (may fail on different architectures)
-                results.append(f"<p style='color: orange;'>⚠️ Tar file not found, attempting binary copy to {server_ip} (may fail on different architectures)...</p>")
-                
-                # Create destination directory on remote server
+                # Copy the already compiled binaries to the remote server.
+                results.append(f"<p>📦 Copying compiled Redis {redis_version} to remote server {server_ip}...</p>")
+
                 dest_dir = f"{redisBinaryBase}redis-{redis_version}"
                 mkdir_cmd = f"ssh {pareOSUser}@{server_ip} 'mkdir -p {dest_dir}'"
                 mkdir_status, mkdir_output = subprocess.getstatusoutput(mkdir_cmd)
@@ -2376,7 +2381,6 @@ def redisNewBinaryCopier_wv(redis_version):
                     failed_copies += 1
                     continue
 
-                # Use rsync to copy files to the remote server
                 rsync_cmd = f"rsync -a --delete {source_dir} {pareOSUser}@{server_ip}:{dest_dir}/"
                 copy_status, copy_output = subprocess.getstatusoutput(rsync_cmd)
 
@@ -2385,16 +2389,17 @@ def redisNewBinaryCopier_wv(redis_version):
                     failed_copies += 1
                 else:
                     results.append(f"<p style='color: green;'>✅ Successfully copied Redis {redis_version} to {server_ip}</p>")
-                    results.append(f"<p style='color: orange;'>⚠️ Warning: If {server_ip} has a different CPU architecture, you may see 'Exec format error'. In that case, manually compile Redis on that server.</p>")
                     successful_copies += 1
+                    remote_copied += 1
 
         # Generate the summary report
+        mode_label = "compiled" if compile_each_server else "copied"
         summary = f"""
         <div class="results-summary">
             <h4>Binary Distribution Summary</h4>
             <p>Total unique servers: {len(unique_servers)}</p>
             <p>Local servers (skipped - already compiled): {skipped_servers}</p>
-            <p>Remote servers compiled: {remote_compiled}</p>
+            <p>Remote servers {mode_label}: {remote_compiled if compile_each_server else remote_copied}</p>
             <p>Successfully processed: {successful_copies} servers</p>
             <p>Failed: {failed_copies} servers</p>
         </div>
