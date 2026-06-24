@@ -35,7 +35,7 @@ webview: ./run.sh
 
 
 ## Version: 3.1             :
-### Update Date             : 11.03.2025
+### Update Date             : 11.03.2026
 ### UpdatedBy               : Alper Yıldız 
 ### Release Note            : AI features, Session Management
 
