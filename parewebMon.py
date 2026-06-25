@@ -2491,7 +2491,10 @@ async def manager():
             <input type="text" id="command" name="command" placeholder="e.g., INFO MEMORY" required style="width: 300px;">
             <br><br>
             <label for="only_masters">Execute only on master nodes:</label>
-            <input type="checkbox" id="only_masters" name="only_masters" value="true">
+            <input type="checkbox" id="only_masters" name="only_masters" value="true" onchange="syncCommandModeCheckboxes('only_masters')">
+            <br><br>
+            <label for="cluster_mode">Run in cluster mode:</label>
+            <input type="checkbox" id="cluster_mode" name="cluster_mode" value="true" onchange="syncCommandModeCheckboxes('cluster_mode')">
             <br><br>
             <label for="wait_seconds">Wait time between nodes (seconds):</label>
             <input type="number" id="wait_seconds" name="wait_seconds" min="0" value="0">
@@ -2787,6 +2790,8 @@ async def manager():
         function executeCommand(event) {{
             event.preventDefault();
             const formData = new FormData(document.getElementById('execute-command-form'));
+            const clusterModeChecked = document.getElementById('cluster_mode').checked;
+            formData.set('cluster_mode', clusterModeChecked ? 'true' : 'false');
             const params = new URLSearchParams(formData).toString();
             fetch('/manager/execute-command/?' + params)
                 .then(response => response.text())
@@ -2797,6 +2802,19 @@ async def manager():
                     document.getElementById('execute-command-result').innerHTML = "<p style='color: red;'>Error executing command: " + error + "</p>";
                 }});
          }}
+
+        function syncCommandModeCheckboxes(sourceId) {{
+            const onlyMasters = document.getElementById('only_masters');
+            const clusterMode = document.getElementById('cluster_mode');
+
+            if (sourceId === 'only_masters' && onlyMasters.checked) {{
+                clusterMode.checked = false;
+            }}
+
+            if (sourceId === 'cluster_mode' && clusterMode.checked) {{
+                onlyMasters.checked = false;
+            }}
+        }}
 
         function showLog(event) {{
             event.preventDefault();
@@ -3041,20 +3059,21 @@ async def manager_show_log(redisNode: str, line_count: int = 50):
         return HTMLResponse(content=f'<div class="response-container error-message"><h3>Error</h3><p>Error fetching log: {str(e)}</p></div>')
 
 @app.get("/manager/execute-command/", response_class=HTMLResponse)
-async def manager_execute_command(command: str, only_masters: bool = False, wait_seconds: int = 0):
+async def manager_execute_command(command: str, only_masters: bool = False, wait_seconds: int = 0, cluster_mode: bool = False):
     """
     Endpoint to execute a Redis command on all nodes or only master nodes.
     Returns styled HTML.
     """
     try:
         # Assuming execute_command_wv returns HTML, likely containing <pre>
-        command_results = execute_command_wv(command, only_masters, wait_seconds)
+        command_results = execute_command_wv(command, only_masters, wait_seconds, cluster_mode)
         # Wrap the result in a styled container with heading
         result_html = f"""
         <div class="response-container">
             <h3>Command Execution Results</h3>
             <p>Command: <code>{command}</code></p>
             <p>Only Masters: {"Yes" if only_masters else "No"}</p>
+            <p>Cluster Mode: {"Yes" if cluster_mode else "No"}</p>
             <p>Wait Seconds: {wait_seconds}</p>
             {command_results}
         </div>

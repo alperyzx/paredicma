@@ -1121,7 +1121,7 @@ def rolling_restart_wv(wait_minutes=0, restart_masters=True):
         return f"<p style='color: red;'>An unexpected error occurred: {str(e)}</p>"
 
 
-def execute_command_wv(command, only_masters=False, wait_seconds=0):
+def execute_command_wv(command, only_masters=False, wait_seconds=0, cluster_mode=False):
     """
     Executes a Redis command on all nodes or only on master nodes.
 
@@ -1136,12 +1136,75 @@ def execute_command_wv(command, only_masters=False, wait_seconds=0):
     if not command:
         return "<p style='color: red;'>Error: No command specified.</p>"
 
+    if only_masters and cluster_mode:
+        return "<p style='color: red;'>Error: choose either master-only mode or cluster mode, not both.</p>"
+
     results = []
     node_count = 0
     success_count = 0
 
     try:
         results.append(f"<h3>Executing command: <code>{command}</code></h3>")
+        results.append(f"<p>Cluster Mode: {'Yes' if cluster_mode else 'No'}</p>")
+
+        if cluster_mode:
+            target_node = None
+            for pareNode in pareNodes:
+                if not pareNode[4]:
+                    continue
+
+                nodeIP = pareNode[0][0]
+                portNumber = pareNode[1][0]
+
+                if pingredisNode(nodeIP, portNumber):
+                    target_node = pareNode
+                    break
+
+            if target_node is None:
+                return "<p style='color: red;'>Error: No reachable active node was found for cluster mode execution.</p>"
+
+            nodeIP = target_node[0][0]
+            portNumber = target_node[1][0]
+            is_master = slaveORMasterNode(nodeIP, portNumber) == 'M'
+            node_type = "Master" if is_master else "Slave"
+
+            try:
+                cmd_status, cmd_output = subprocess.getstatusoutput(
+                    redisConnectCmd(nodeIP, portNumber, command, cluster_mode))
+
+                output_lines = cmd_output.strip().split('\n')
+                formatted_output = "<br>".join(output_lines)
+
+                if cmd_status == 0:
+                    success_count = 1
+                    node_count = 1
+                    results.append(f"""
+                    <div style='margin: 10px 0; padding: 10px; border-left: 4px solid green;'>
+                        <h4>Cluster node {nodeIP}:{portNumber} ({node_type}) - Success</h4>
+                        <pre style='margin: 5px 0;'>{formatted_output}</pre>
+                    </div>
+                    """)
+                else:
+                    node_count = 1
+                    results.append(f"""
+                    <div style='margin: 10px 0; padding: 10px; border-left: 4px solid orange;'>
+                        <h4>Cluster node {nodeIP}:{portNumber} ({node_type}) - Command returned non-zero status</h4>
+                        <pre style='margin: 5px 0;'>{formatted_output}</pre>
+                    </div>
+                    """)
+
+            except Exception as e:
+                node_count = 1
+                results.append(f"""
+                <div style='margin: 10px 0; padding: 10px; border-left: 4px solid red;'>
+                    <h4>Cluster node {nodeIP}:{portNumber} ({node_type}) - Error</h4>
+                    <p style='color: red;'>Error executing command: {str(e)}</p>
+                </div>
+                """)
+
+            results.append(f"<h3>Summary</h3>")
+            results.append(f"<p>Command executed on {success_count} of {node_count} reachable cluster node.</p>")
+            return "".join(results)
 
         for node_index, pareNode in enumerate(pareNodes, start=1):
             nodeIP = pareNode[0][0]
@@ -1163,7 +1226,7 @@ def execute_command_wv(command, only_masters=False, wait_seconds=0):
                     try:
                         # Execute the command
                         cmd_status, cmd_output = subprocess.getstatusoutput(
-                            redisConnectCmd(nodeIP, portNumber, command))
+                            redisConnectCmd(nodeIP, portNumber, command, cluster_mode))
 
                         # Format output for display
                         output_lines = cmd_output.strip().split('\n')

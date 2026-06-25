@@ -163,12 +163,13 @@ def getuniqueServers(pareNodes):
     return uniqueservers
 
 
-def redisConnectCmd(nodeIP, portNumber, redisCmd):
+def redisConnectCmd(nodeIP, portNumber, redisCmd, cluster_mode=False):
     redisCliCmd = ''
+    cluster_flag = ' -c' if cluster_mode else ''
     if redisPwdAuthentication:
-        redisCliCmd = redisBinaryDir + 'src/redis-cli -h ' + nodeIP + ' -p ' + portNumber + ' --no-auth-warning -a ' + redisPwd + ' ' + redisCmd
+        redisCliCmd = redisBinaryDir + 'src/redis-cli -h ' + nodeIP + ' -p ' + portNumber + cluster_flag + ' --no-auth-warning -a ' + redisPwd + ' ' + redisCmd
     else:
-        redisCliCmd = redisBinaryDir + '/src/redis-cli -h ' + nodeIP + ' -p ' + portNumber + ' ' + redisCmd
+        redisCliCmd = redisBinaryDir + '/src/redis-cli -h ' + nodeIP + ' -p ' + portNumber + cluster_flag + ' ' + redisCmd
     return redisCliCmd
 
 
@@ -909,12 +910,13 @@ def validIP(IPaddr):
         return False
 
 
-def redisConnectCmd(nodeIP, portNumber, redisCmd):
+def redisConnectCmd(nodeIP, portNumber, redisCmd, cluster_mode=False):
     redisCliCmd = ''
+    cluster_flag = ' -c' if cluster_mode else ''
     if redisPwdAuthentication:
-        redisCliCmd = redisBinaryDir + 'src/redis-cli -h ' + nodeIP + ' -p ' + portNumber + ' --no-auth-warning -a ' + redisPwd + ' ' + redisCmd
+        redisCliCmd = redisBinaryDir + 'src/redis-cli -h ' + nodeIP + ' -p ' + portNumber + cluster_flag + ' --no-auth-warning -a ' + redisPwd + ' ' + redisCmd
     else:
-        redisCliCmd = redisBinaryDir + '/src/redis-cli -h ' + nodeIP + ' -p ' + portNumber + ' ' + redisCmd
+        redisCliCmd = redisBinaryDir + '/src/redis-cli -h ' + nodeIP + ' -p ' + portNumber + cluster_flag + ' ' + redisCmd
     return redisCliCmd
 
 
