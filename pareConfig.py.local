@@ -50,7 +50,7 @@ aiProvider = "ollama"
 
 # Ollama settings (used when aiProvider = "ollama")
 ollamaUrl = "http://localhost:11434"
-aiModel = "qwen3:4b-instruct-2507-q4_K_M"  # change to "qwen3:30b" for higher quality
+aiModel = "granite4.1:3b"  #
 
 # OpenAI settings (used when aiProvider = "openai")
 openaiApiKey = ""                  # sk-...
