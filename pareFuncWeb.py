@@ -2239,6 +2239,15 @@ def extract_compile_redis_wv(redis_tarfile):
     Returns HTML content with the operation results.
     """
     try:
+        prereq = check_redis_compile_requirements_local()
+        if not prereq['ok']:
+            return f"""
+            <div class="error-message">
+                <p style="color: orange; font-weight: bold;">Missing Compile Requirements</p>
+                <p>{prereq['message']}</p>
+            </div>
+            """
+
         # Extract version number from filename (e.g. redis-7.2.4.tar.gz -> 7.2.4)
         import re
         version_match = re.search(r'redis-([0-9]+\.[0-9]+\.[0-9]+)', redis_tarfile)
@@ -3752,6 +3761,19 @@ def compile_redis_wv(tar_file, version):
         dict with success status and message
     """
     try:
+        prereq = check_redis_compile_requirements_local()
+        if not prereq['ok']:
+            return {
+                'success': False,
+                'message': prereq['message']
+            }
+
+        if prereq['missing_optional']:
+            logWrite(
+                pareLogFile,
+                f":: Optional compile tools missing: {', '.join(prereq['missing_optional'])}"
+            )
+
         # Check if tar file exists
         if not os.path.isfile(tar_file):
             return {
@@ -3813,6 +3835,19 @@ def compile_redis_remote_wv(server_ip, tar_file, version):
             }
         
         logWrite(pareLogFile, f':: {server_ip} :: Starting remote Redis compilation...')
+
+        prereq = check_redis_compile_requirements_remote(server_ip)
+        if not prereq['ok']:
+            return {
+                'success': False,
+                'message': prereq['message']
+            }
+
+        if prereq['missing_optional']:
+            logWrite(
+                pareLogFile,
+                f":: {server_ip} :: Optional compile tools missing: {', '.join(prereq['missing_optional'])}"
+            )
         
         # Check if tar file exists locally
         if not os.path.isfile(tar_file):

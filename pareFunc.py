@@ -12,6 +12,129 @@ from screenMenu import *
 import importlib
 
 
+def _collect_missing_tools(command_list):
+    """
+    Return missing commands from command_list based on local PATH lookup.
+    """
+    missing = []
+    for cmd in command_list:
+        status, _ = subprocess.getstatusoutput(f'command -v {cmd}')
+        if status != 0:
+            missing.append(cmd)
+    return missing
+
+
+def check_redis_compile_requirements_local():
+    """
+    Validate local Redis compile dependencies.
+
+    Returns:
+        dict: {
+            'ok': bool,
+            'missing_required': list,
+            'missing_optional': list,
+            'message': str
+        }
+    """
+    required_tools = ['tar', 'make', 'gcc', 'g++']
+    optional_tools = ['rsync', 'tclsh']
+
+    missing_required = _collect_missing_tools(required_tools)
+    missing_optional = _collect_missing_tools(optional_tools)
+
+    if not missing_required:
+        msg = 'Redis compile prerequisite check passed on local server.'
+        if missing_optional:
+            msg += ' Optional tools missing: ' + ', '.join(missing_optional)
+        return {
+            'ok': True,
+            'missing_required': [],
+            'missing_optional': missing_optional,
+            'message': msg
+        }
+
+    install_hint = (
+        'Install missing packages first. On RHEL/CentOS/Alma/Rocky try: '
+        'sudo dnf install -y gcc gcc-c++ make tar rsync tcl'
+    )
+
+    return {
+        'ok': False,
+        'missing_required': missing_required,
+        'missing_optional': missing_optional,
+        'message': (
+            'Missing required compile tools: ' + ', '.join(missing_required) + '. ' + install_hint
+        )
+    }
+
+
+def check_redis_compile_requirements_remote(serverIP):
+    """
+    Validate Redis compile dependencies on a remote server over SSH.
+
+    Returns:
+        dict: {
+            'ok': bool,
+            'missing_required': list,
+            'missing_optional': list,
+            'message': str
+        }
+    """
+    if is_local_server(serverIP):
+        return check_redis_compile_requirements_local()
+
+    required_tools = ['tar', 'make', 'gcc', 'g++']
+    optional_tools = ['rsync', 'tclsh']
+    missing_required = []
+    missing_optional = []
+
+    for cmd in required_tools:
+        check_cmd = (
+            f'ssh -q -o "StrictHostKeyChecking no" {pareOSUser}@{serverIP} '
+            f'-C "command -v {cmd} > /dev/null 2>&1"'
+        )
+        status, _ = subprocess.getstatusoutput(check_cmd)
+        if status != 0:
+            missing_required.append(cmd)
+
+    for cmd in optional_tools:
+        check_cmd = (
+            f'ssh -q -o "StrictHostKeyChecking no" {pareOSUser}@{serverIP} '
+            f'-C "command -v {cmd} > /dev/null 2>&1"'
+        )
+        status, _ = subprocess.getstatusoutput(check_cmd)
+        if status != 0:
+            missing_optional.append(cmd)
+
+    if not missing_required:
+        msg = f'Compile prerequisite check passed on remote server {serverIP}.'
+        if missing_optional:
+            msg += ' Optional tools missing: ' + ', '.join(missing_optional)
+        return {
+            'ok': True,
+            'missing_required': [],
+            'missing_optional': missing_optional,
+            'message': msg
+        }
+
+    install_hint = (
+        'Install missing packages first. Example for RHEL family: '
+        'sudo dnf install -y gcc gcc-c++ make tar rsync tcl'
+    )
+
+    return {
+        'ok': False,
+        'missing_required': missing_required,
+        'missing_optional': missing_optional,
+        'message': (
+            f'Missing required compile tools on {serverIP}: '
+            + ', '.join(missing_required)
+            + '. '
+            + install_hint
+        )
+    }
+
+
 def is_local_server(serverIP):
     """
     Comprehensive check if a server IP refers to the local machine.
@@ -1801,6 +1924,17 @@ def redisNewBinaryCopier(myServerIP, myRedisVersion):
 
 
 def compileRedis(redisTarFileName, redisCurrentVersion):
+    prereq = check_redis_compile_requirements_local()
+    if not prereq['ok']:
+        logWrite(pareLogFile, bcolors.FAIL + ' :: ' + prereq['message'] + bcolors.ENDC)
+        return False
+
+    if prereq['missing_optional']:
+        logWrite(
+            pareLogFile,
+            bcolors.WARNING + ' :: Optional compile tools missing: ' + ', '.join(prereq['missing_optional']) + bcolors.ENDC
+        )
+
     compileStatus = False
     isExtract, comResponse = subprocess.getstatusoutput('tar -xvf ' + redisTarFileName)
     if isExtract == 0:
@@ -1857,6 +1991,17 @@ def compileRedisRemote(serverIP, redisTarFileName, redisCurrentVersion):
     
     logWrite(pareLogFile,
              bcolors.BOLD + f' ::{serverIP}:: Starting remote Redis compilation...' + bcolors.ENDC)
+
+    prereq = check_redis_compile_requirements_remote(serverIP)
+    if not prereq['ok']:
+        logWrite(pareLogFile, bcolors.FAIL + f' ::{serverIP}:: {prereq["message"]}' + bcolors.ENDC)
+        return False
+
+    if prereq['missing_optional']:
+        logWrite(
+            pareLogFile,
+            bcolors.WARNING + f' ::{serverIP}:: Optional compile tools missing: ' + ', '.join(prereq['missing_optional']) + bcolors.ENDC
+        )
     
     # Check if tar file exists locally
     if not os.path.exists(redisTarFileName):
