@@ -18,6 +18,20 @@ from time import sleep
 import sys
 
 
+version_control_restart_in_progress = False
+version_control_restart_node = None
+
+
+def set_version_control_restart_state(in_progress, node_address=None):
+    global version_control_restart_in_progress, version_control_restart_node
+    version_control_restart_in_progress = in_progress
+    version_control_restart_node = node_address if in_progress else None
+
+
+def get_version_control_restart_state():
+    return version_control_restart_in_progress, version_control_restart_node
+
+
 def is_local_server(serverIP):
     """
     Comprehensive check if a server IP refers to the local machine.
@@ -552,6 +566,16 @@ def node_action_wv(redisNode, action, confirmed=False):
     global logWrite
 
     try:
+        action_lower = action.lower()
+        restart_busy, restart_busy_node = get_version_control_restart_state()
+        if action_lower == 'restart' and restart_busy:
+            return (
+                "<div class='response-container'>"
+                "<p style='color: orange;'><strong>Notice:</strong> Another node restart is already in progress.</p>"
+                "<p>Please wait for the current restart to finish and reload the version control section before starting a new one.</p>"
+                "</div>"
+            )
+
         if not redisNode or ':' not in redisNode:
             return (
                 "<div class='response-container'>"
@@ -559,6 +583,9 @@ def node_action_wv(redisNode, action, confirmed=False):
                 "<p>All eligible nodes are already running, so there is nothing to start, stop, or restart.</p>"
                 "</div>"
             )
+
+        if action_lower == 'restart':
+            set_version_control_restart_state(True, redisNode)
 
         nodeIP, portNumber = redisNode.split(':')
         node_details = None
@@ -578,7 +605,7 @@ def node_action_wv(redisNode, action, confirmed=False):
         node_num_str = str(node_index)
 
         # Check if the node is already running when trying to start it
-        if action.lower() == 'start':
+        if action_lower == 'start':
             if pingredisNode(nodeIP, portNumber):
                 return f"""
                 <div class="response-container">
@@ -588,7 +615,7 @@ def node_action_wv(redisNode, action, confirmed=False):
                 """
 
         # For stop or restart action, check if the node is master and if confirmation is required
-        if action.lower() == 'stop' or action.lower() == 'restart':
+        if action_lower == 'stop' or action_lower == 'restart':
             is_master, has_slave = check_if_master(nodeIP, portNumber)
 
             if is_master and not confirmed:
@@ -597,9 +624,9 @@ def node_action_wv(redisNode, action, confirmed=False):
                     return f"""
                     <div class="confirmation-needed" id="confirmation-dialog">
                         <p style='color: red; font-weight: bold;'>Warning: This node ({redisNode}) is a MASTER node with slaves!</p>
-                        <p>{"Stopping" if action.lower() == 'stop' else "Restarting"} this node will trigger master/slave failover.</p>
+                        <p>{"Stopping" if action_lower == 'stop' else "Restarting"} this node will trigger master/slave failover.</p>
                         <p>Do you want to continue?</p>
-                        <button class="confirm-btn" data-node="{redisNode}" data-action="{action.lower()}">Yes, {action.capitalize()} the Node</button>
+                        <button class="confirm-btn" data-node="{redisNode}" data-action="{action_lower}">Yes, {action.capitalize()} the Node</button>
                         <button class="cancel-btn">Cancel</button>
                     </div>
                     """
@@ -607,15 +634,15 @@ def node_action_wv(redisNode, action, confirmed=False):
                     return f"""
                     <div class="confirmation-needed" id="confirmation-dialog">
                         <p style='color: red; font-weight: bold;'>Warning: This node ({redisNode}) is a MASTER node with NO slaves!</p>
-                        <p style='color: red;'>{"Stopping" if action.lower() == 'stop' else "Restarting"} this node will cause Redis cluster to FAIL!</p>
+                        <p style='color: red;'>{"Stopping" if action_lower == 'stop' else "Restarting"} this node will cause Redis cluster to FAIL!</p>
                         <p>Do you want to continue?</p>
-                        <button class="confirm-btn" data-node="{redisNode}" data-action="{action.lower()}">Yes, {action.capitalize()} the Node</button>
+                        <button class="confirm-btn" data-node="{redisNode}" data-action="{action_lower}">Yes, {action.capitalize()} the Node</button>
                         <button class="cancel-btn">Cancel</button>
                     </div>
                     """
 
         # Check if trying to stop a node that's already stopped
-        if action.lower() == 'stop' and not pingredisNode(nodeIP, portNumber):
+        if action_lower == 'stop' and not pingredisNode(nodeIP, portNumber):
             return f"""
             <div class="response-container">
                 <p style='color: orange;'><strong>Notice:</strong> Node {redisNode} is already stopped.</p>
@@ -626,13 +653,13 @@ def node_action_wv(redisNode, action, confirmed=False):
         action_func = None
         action_gerund = ""  # For user feedback
 
-        if action.lower() == 'start':
+        if action_lower == 'start':
             action_func = startNode
             action_gerund = "starting"
-        elif action.lower() == 'stop':
+        elif action_lower == 'stop':
             action_func = stopNode
             action_gerund = "stopping"
-        elif action.lower() == 'restart':
+        elif action_lower == 'restart':
             action_func = restartNode
             action_gerund = "restarting"
         else:
@@ -652,7 +679,7 @@ def node_action_wv(redisNode, action, confirmed=False):
 
         try:
             # For stop and restart actions with confirmation, handle it differently
-            if (action.lower() == 'stop' or action.lower() == 'restart') and confirmed:
+            if (action_lower == 'stop' or action_lower == 'restart') and confirmed:
                 # First check if node is master and has slaves
                 is_master, has_slave = check_if_master(nodeIP, portNumber)
                 if is_master and has_slave:
@@ -661,17 +688,17 @@ def node_action_wv(redisNode, action, confirmed=False):
                     switchMasterSlave(nodeIP, node_index, portNumber)
 
                 # Now perform the action
-                if action.lower() == 'stop':
+                if action_lower == 'stop':
                     log_messages.append(f"Stopping Redis node {nodeIP}:{portNumber}")
                     stopNode(nodeIP, node_num_str, portNumber, non_interactive=True)
-                elif action.lower() == 'restart':
+                elif action_lower == 'restart':
                     log_messages.append(f"Restarting Redis node {nodeIP}:{portNumber}")
                     # Call stopNode with non_interactive flag first, then startNode
                     stopNode(nodeIP, node_num_str, portNumber, non_interactive=True)
                     startNode(nodeIP, node_num_str, portNumber, dedicateCpuCores)
             else:
                 # Normal action execution for non-stop actions or non-master nodes
-                if action.lower() in ['start', 'restart']:
+                if action_lower in ['start', 'restart']:
                     action_func(nodeIP, node_num_str, portNumber, dedicateCpuCores)
                 else:  # stopNode only needs nodeIP, node_num_str, portNumber
                     action_func(nodeIP, node_num_str, portNumber)
@@ -686,9 +713,9 @@ def node_action_wv(redisNode, action, confirmed=False):
             result_message = f"Action '{action}' completed for node {redisNode}."
             # Create the status span separately
             status_span = ""
-            if action.lower() == 'start' or action.lower() == 'restart':
+            if action_lower == 'start' or action_lower == 'restart':
                 status_span = "<span style='color: green;'>Running</span>" if final_ping_status else "<span style='color: red;'>Not Running</span>"
-            elif action.lower() == 'stop':
+            elif action_lower == 'stop':
                 status_span = "<span style='color: gray;'>Stopped</span>" if not final_ping_status else "<span style='color: red;'>Still Running?</span>"
 
             # Add the status span to the result message
@@ -720,6 +747,12 @@ def node_action_wv(redisNode, action, confirmed=False):
 
     except Exception as e:
         return f"<p style='color: red;'>An unexpected error occurred: {e}</p>"
+
+    finally:
+        if 'action_lower' in locals() and action_lower == 'restart':
+            restart_busy, restart_busy_node = get_version_control_restart_state()
+            if restart_busy and restart_busy_node == redisNode:
+                set_version_control_restart_state(False)
 
 
 def switch_master_slave_wv(redisNode):
@@ -2916,6 +2949,8 @@ def redisNodesVersionControl_wv():
     Returns HTML-formatted table showing all nodes and their Redis versions.
     """
     try:
+        restart_in_progress, restart_node = get_version_control_restart_state()
+
         # Reload pareConfig to get the latest redisVersion
         import importlib
         import sys
@@ -2986,6 +3021,7 @@ def redisNodesVersionControl_wv():
                 <p class="{'warning-text' if inconsistent_versions else ''}">
                     {("⚠️ Inconsistent versions detected, restart node(s) to fix" if inconsistent_versions else "✓ All nodes running configured version")}
                 </p>
+                {f'<p class="warning-text">⏳ Restart in progress for <strong>{restart_node}</strong>. Please wait for the result before starting another restart.</p>' if restart_in_progress else ''}
             </div>
             
             <table class="version-table">
@@ -3012,12 +3048,14 @@ def redisNodesVersionControl_wv():
             if node["status"] == "warning":
                 node_address = f"{node['ip']}:{node['port']}"
                 is_master = "true" if node["role"] == "Master" else "false"
+                restart_disabled_attr = "disabled" if restart_in_progress else ""
+                restart_onclick = "" if restart_in_progress else f"onclick=\"restartNodeFromVersion('{node_address}', {is_master})\""
                 status_cell = f'''
                     <div class="warning-icon-container">
                         <span class="warning-icon">⚠️</span>
                         <div class="restart-tooltip">
                             <p>Node needs restart to apply new version</p>
-                            <button class="restart-btn" onclick="restartNodeFromVersion('{node_address}', {is_master})">
+                            <button class="restart-btn" {restart_onclick} {restart_disabled_attr}>
                                 🔄 Restart Node
                             </button>
                         </div>

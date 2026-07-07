@@ -4373,6 +4373,16 @@ function restartNodeFromVersion(nodeAddress, isMaster) {{
     showRestartModal(nodeAddress, isMaster);
 }}
 
+function setVersionControlRestartButtonsDisabled(disabled) {{
+    const container = document.getElementById('redis-version-control-container');
+    if (!container) return;
+
+    container.querySelectorAll('.restart-btn').forEach(btn => {{
+        btn.disabled = disabled;
+        btn.classList.toggle('btn-disabled', disabled);
+    }});
+}}
+
 // Execute the actual restart (called after modal confirmation)
 function executeNodeRestart(nodeAddress, isMaster) {{
     // Find the warning icon container for this node and show loading state
@@ -4408,6 +4418,7 @@ function executeNodeRestart(nodeAddress, isMaster) {{
         existingStatus.remove();
     }}
     container.insertBefore(statusDiv, container.firstChild);
+    setVersionControlRestartButtonsDisabled(true);
     
     // Call the restart endpoint
     fetch(`/manager/node-action/?redisNode=${{encodeURIComponent(nodeAddress)}}&action=restart&confirmed=true`)
