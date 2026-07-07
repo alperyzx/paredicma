@@ -104,6 +104,55 @@ def serverInfo_wv(serverIP):
         # Check if it's local server or SSH is available
         if is_local_server(serverIP):
             html_content = f"""
+            <style>
+                .server-info-panel {{
+                    background: #f9f9f9;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    padding: 12px 14px;
+                }}
+                .server-info-panel h2,
+                .server-info-panel h3 {{
+                    color: inherit;
+                }}
+                .server-info-line {{
+                    margin: 0.25rem 0;
+                    color: #4a4a4a;
+                }}
+                .server-info-master {{ color: #3d6fb4; }}
+                .server-info-slave {{ color: #5b6f8a; }}
+                .server-info-down {{ color: #b35a5a; }}
+                .server-info-unknown {{ color: #9a7b39; }}
+                @media (prefers-color-scheme: dark) {{
+                    .server-info-panel {{
+                        background: #1e1e1e;
+                        border-color: #444;
+                    }}
+                    .server-info-line {{ color: #c8c8c8; }}
+                    .server-info-master {{ color: #7aa7d8; }}
+                    .server-info-slave {{ color: #93a4b8; }}
+                    .server-info-down {{ color: #d08a8a; }}
+                    .server-info-unknown {{ color: #c9af6a; }}
+                }}
+                html[data-theme="dark"] .server-info-panel {{
+                    background: #1e1e1e;
+                    border-color: #444;
+                }}
+                html[data-theme="dark"] .server-info-line {{ color: #c8c8c8; }}
+                html[data-theme="dark"] .server-info-master {{ color: #7aa7d8; }}
+                html[data-theme="dark"] .server-info-slave {{ color: #93a4b8; }}
+                html[data-theme="dark"] .server-info-down {{ color: #d08a8a; }}
+                html[data-theme="dark"] .server-info-unknown {{ color: #c9af6a; }}
+                html[data-theme="light"] .server-info-panel {{
+                    background: #f9f9f9;
+                    border-color: #ddd;
+                }}
+                html[data-theme="light"] .server-info-line {{ color: #4a4a4a; }}
+                html[data-theme="light"] .server-info-master {{ color: #3d6fb4; }}
+                html[data-theme="light"] .server-info-slave {{ color: #5b6f8a; }}
+                html[data-theme="light"] .server-info-down {{ color: #b35a5a; }}
+                html[data-theme="light"] .server-info-unknown {{ color: #9a7b39; }}
+            </style>
             <h2>Server Information ({serverIP} - {server_name})</h2>
             <h3>CPU Cores</h3>
             <pre>{getcmdOutput_wv(serverIP, "numactl --hardware")}</pre>
@@ -116,6 +165,55 @@ def serverInfo_wv(serverIP):
             """
         elif is_ssh_available(serverIP):
             html_content = f"""
+            <style>
+                .server-info-panel {{
+                    background: #f9f9f9;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    padding: 12px 14px;
+                }}
+                .server-info-panel h2,
+                .server-info-panel h3 {{
+                    color: inherit;
+                }}
+                .server-info-line {{
+                    margin: 0.25rem 0;
+                    color: #4a4a4a;
+                }}
+                .server-info-master {{ color: #3d6fb4; }}
+                .server-info-slave {{ color: #5b6f8a; }}
+                .server-info-down {{ color: #b35a5a; }}
+                .server-info-unknown {{ color: #9a7b39; }}
+                @media (prefers-color-scheme: dark) {{
+                    .server-info-panel {{
+                        background: #1e1e1e;
+                        border-color: #444;
+                    }}
+                    .server-info-line {{ color: #c8c8c8; }}
+                    .server-info-master {{ color: #7aa7d8; }}
+                    .server-info-slave {{ color: #93a4b8; }}
+                    .server-info-down {{ color: #d08a8a; }}
+                    .server-info-unknown {{ color: #c9af6a; }}
+                }}
+                html[data-theme="dark"] .server-info-panel {{
+                    background: #1e1e1e;
+                    border-color: #444;
+                }}
+                html[data-theme="dark"] .server-info-line {{ color: #c8c8c8; }}
+                html[data-theme="dark"] .server-info-master {{ color: #7aa7d8; }}
+                html[data-theme="dark"] .server-info-slave {{ color: #93a4b8; }}
+                html[data-theme="dark"] .server-info-down {{ color: #d08a8a; }}
+                html[data-theme="dark"] .server-info-unknown {{ color: #c9af6a; }}
+                html[data-theme="light"] .server-info-panel {{
+                    background: #f9f9f9;
+                    border-color: #ddd;
+                }}
+                html[data-theme="light"] .server-info-line {{ color: #4a4a4a; }}
+                html[data-theme="light"] .server-info-master {{ color: #3d6fb4; }}
+                html[data-theme="light"] .server-info-slave {{ color: #5b6f8a; }}
+                html[data-theme="light"] .server-info-down {{ color: #b35a5a; }}
+                html[data-theme="light"] .server-info-unknown {{ color: #9a7b39; }}
+            </style>
             <h2>Server Information ({serverIP} - {server_name})</h2>
             <h3>CPU Cores</h3>
             <pre>{getcmdOutput_wv(serverIP, "numactl --hardware")}</pre>
@@ -159,13 +257,13 @@ def getredisnodeInfo_wv(serverIP):
                     returnVal = slaveORMasterNode(serverIP, portNumber)
                     nodenumber = nodenumbers.pop(0)
                     if returnVal == 'M':
-                        redisnodeInfo += f"<p style='color: green;'> Server IP: {serverIP} | Node Number: {nodenumber} | Port: {portNumber} | Status: UP</p>"
+                        redisnodeInfo += f"<p class='server-info-line server-info-master'> Server IP: {serverIP} | Node Number: {nodenumber} | Port: {portNumber} | Status: UP</p>"
                     elif returnVal == 'S':
-                        redisnodeInfo += f"<p style='color: #001f3f;'> Server IP: {serverIP} | Node Number: {nodenumber} | Port: {portNumber} | Status: UP</p>"
+                        redisnodeInfo += f"<p class='server-info-line server-info-slave'> Server IP: {serverIP} | Node Number: {nodenumber} | Port: {portNumber} | Status: UP</p>"
                     else:
-                        redisnodeInfo += f"<p style='color: red;'> Server IP: {serverIP} | Node Number: {nodenumber} | Port: {portNumber} | Status: DOWN</p>"
+                        redisnodeInfo += f"<p class='server-info-line server-info-down'> Server IP: {serverIP} | Node Number: {nodenumber} | Port: {portNumber} | Status: DOWN</p>"
                 else:
-                    redisnodeInfo += f"<p style='color: orange;'> Server IP: {serverIP} | Node Number: {nodenumbers.pop(0)} | Port: {portNumber} | Status: Unknown</p>"
+                    redisnodeInfo += f"<p class='server-info-line server-info-unknown'> Server IP: {serverIP} | Node Number: {nodenumbers.pop(0)} | Port: {portNumber} | Status: Unknown</p>"
     return redisnodeInfo
 
 

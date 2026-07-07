@@ -270,17 +270,23 @@ def list_nodes():
         }}
         .master-address {{
             font-size: 1.1em;
+            color: #ffffff;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
         }}
         .master-id {{
             font-size: 0.85em;
-            opacity: 0.9;
+            opacity: 1;
             font-family: monospace;
+            color: rgba(255, 255, 255, 0.92);
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
         }}
         .slot-info {{
             font-size: 0.85em;
             background: rgba(255,255,255,0.2);
             padding: 3px 8px;
             border-radius: 4px;
+            color: #ffffff;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
         }}
         .replicas-container {{
             padding: 10px 15px;
@@ -304,14 +310,15 @@ def list_nodes():
         .replica-address {{
             flex-grow: 1;
             font-weight: 500;
+            color: #2b2b2b;
         }}
         .replica-id {{
             font-size: 0.85em;
-            color: #666;
+            color: #4f4f4f;
             font-family: monospace;
         }}
         .no-replicas {{
-            color: #999;
+            color: #666;
             font-style: italic;
             padding: 10px;
         }}
@@ -372,9 +379,10 @@ def list_nodes():
         .summary-count {{
             font-size: 1.5em;
             font-weight: bold;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
         }}
         .summary-label {{
-            color: #666;
+            color: #404040;
         }}
         @media (prefers-color-scheme: dark) {{
             .node-card {{
@@ -384,6 +392,11 @@ def list_nodes():
             .master-header {{
                 background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
             }}
+            .master-address,
+            .master-id,
+            .slot-info {{
+                color: #ffffff;
+            }}
             .replicas-container {{
                 background: #252525;
             }}
@@ -391,11 +404,14 @@ def list_nodes():
                 background: #1e1e1e;
                 border-color: #444;
             }}
+            .replica-address {{
+                color: #e8e8e8;
+            }}
             .replica-id {{
                 color: #aaa;
             }}
             .no-replicas {{
-                color: #777;
+                color: #bdbdbd;
             }}
             .down-section {{
                 background: #2d1a1a;
@@ -412,31 +428,39 @@ def list_nodes():
                 background: #1a3a5c;
             }}
             .summary-label {{
-                color: #aaa;
+                color: #d7d7d7;
             }}
         }}
         html[data-theme="dark"] .node-card {{ background: #1e1e1e; border-color: #444; }}
         html[data-theme="dark"] .master-header {{ background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); }}
+        html[data-theme="dark"] .master-address,
+        html[data-theme="dark"] .master-id,
+        html[data-theme="dark"] .slot-info {{ color: #ffffff; }}
         html[data-theme="dark"] .replicas-container {{ background: #252525; }}
         html[data-theme="dark"] .replica-row {{ background: #1e1e1e; border-color: #444; }}
+        html[data-theme="dark"] .replica-address {{ color: #e8e8e8; }}
         html[data-theme="dark"] .replica-id {{ color: #aaa; }}
-        html[data-theme="dark"] .no-replicas {{ color: #777; }}
+        html[data-theme="dark"] .no-replicas {{ color: #bdbdbd; }}
         html[data-theme="dark"] .down-section {{ background: #2d1a1a; border-color: #5c2828; }}
         html[data-theme="dark"] .unknown-section {{ background: #252525; border-color: #444; }}
         html[data-theme="dark"] .down-node, html[data-theme="dark"] .unknown-node {{ background: #1e1e1e; }}
         html[data-theme="dark"] .summary-bar {{ background: #1a3a5c; }}
-        html[data-theme="dark"] .summary-label {{ color: #aaa; }}
+        html[data-theme="dark"] .summary-label {{ color: #d7d7d7; }}
         html[data-theme="light"] .node-card {{ background: #fff !important; border-color: #ddd !important; }}
         html[data-theme="light"] .master-header {{ background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important; }}
+        html[data-theme="light"] .master-address,
+        html[data-theme="light"] .master-id,
+        html[data-theme="light"] .slot-info {{ color: #ffffff !important; }}
         html[data-theme="light"] .replicas-container {{ background: #f9f9f9 !important; }}
         html[data-theme="light"] .replica-row {{ background: #fff !important; border-color: #e0e0e0 !important; }}
-        html[data-theme="light"] .replica-id {{ color: #666 !important; }}
-        html[data-theme="light"] .no-replicas {{ color: #999 !important; }}
+        html[data-theme="light"] .replica-address {{ color: #2b2b2b !important; }}
+        html[data-theme="light"] .replica-id {{ color: #4f4f4f !important; }}
+        html[data-theme="light"] .no-replicas {{ color: #666 !important; }}
         html[data-theme="light"] .down-section {{ background: #ffebee !important; border-color: #ffcdd2 !important; }}
         html[data-theme="light"] .unknown-section {{ background: #f5f5f5 !important; border-color: #e0e0e0 !important; }}
         html[data-theme="light"] .down-node, html[data-theme="light"] .unknown-node {{ background: #fff !important; }}
         html[data-theme="light"] .summary-bar {{ background: #e3f2fd !important; }}
-        html[data-theme="light"] .summary-label {{ color: #666 !important; }}
+        html[data-theme="light"] .summary-label {{ color: #404040 !important; }}
     </style>
     <html>
     <title>Node List</title>
@@ -580,7 +604,7 @@ async def get_server_info(server_ip: str):
         <head>
         </head>
         <body>
-            <p>{server_info}</p>
+            <div class="server-info-panel">{server_info}</div>
         </body>
         </html>
         """
