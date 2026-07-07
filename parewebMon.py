@@ -2562,15 +2562,21 @@ async def manager():
             const action = document.getElementById('action').value;
             const nodeSelect = document.getElementById('redisNodeAction');
             const spinner = document.getElementById('nodeLoadingSpinner');
+            const submitBtn = document.querySelector('#node-action-form input[type="submit"]');
+            const resultDiv = document.getElementById('node-action-result');
             
             // Show loading state
             nodeSelect.innerHTML = '<option value="">Loading nodes...</option>';
             nodeSelect.disabled = true;
+            submitBtn.disabled = true;
             spinner.style.display = 'inline';
             
             fetch('/manager/get-nodes-by-action/?action=' + encodeURIComponent(action))
                 .then(response => response.json())
                 .then(data => {{
+                    if (resultDiv) {{
+                        resultDiv.innerHTML = '';
+                    }}
                     nodeSelect.innerHTML = '';
                     if (data.nodes && data.nodes.length > 0) {{
                         data.nodes.forEach(node => {{
@@ -2584,13 +2590,18 @@ async def manager():
                         option.value = '';
                         option.textContent = data.message || 'No nodes available for this action';
                         nodeSelect.appendChild(option);
+                        if (resultDiv && data.message) {{
+                            resultDiv.innerHTML = "<div class='response-container'><p style='color: orange;'><strong>Notice:</strong> " + data.message + "</p></div>";
+                        }}
                     }}
                     nodeSelect.disabled = false;
+                    submitBtn.disabled = !nodeSelect.value;
                     spinner.style.display = 'none';
                 }})
                 .catch(error => {{
                     nodeSelect.innerHTML = '<option value="">Error loading nodes</option>';
                     nodeSelect.disabled = false;
+                    submitBtn.disabled = true;
                     spinner.style.display = 'none';
                     console.error('Error fetching nodes:', error);
                 }});
@@ -2652,6 +2663,12 @@ async def manager():
         function performNodeAction(event) {{
             event.preventDefault();
             const submitBtn = document.querySelector('#node-action-form input[type="submit"]');
+            const nodeSelect = document.getElementById('redisNodeAction');
+            if (!nodeSelect.value) {{
+                document.getElementById('node-action-result').innerHTML = "<div class='response-container'><p style='color: orange;'><strong>Notice:</strong> All eligible nodes are already running, so there is nothing to perform.</p></div>";
+                submitBtn.disabled = true;
+                return;
+            }}
             submitBtn.disabled = true;
             submitBtn.value = 'Processing...';
             submitBtn.classList.add('btn-disabled');

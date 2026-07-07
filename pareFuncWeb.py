@@ -454,6 +454,14 @@ def node_action_wv(redisNode, action, confirmed=False):
     global logWrite
 
     try:
+        if not redisNode or ':' not in redisNode:
+            return (
+                "<div class='response-container'>"
+                "<p style='color: orange;'><strong>Notice:</strong> No node action is needed right now.</p>"
+                "<p>All eligible nodes are already running, so there is nothing to start, stop, or restart.</p>"
+                "</div>"
+            )
+
         nodeIP, portNumber = redisNode.split(':')
         node_details = None
         node_index = -1
