@@ -2,7 +2,7 @@
 """
 Paredicma Project Updater
 Downloads the latest version from GitHub and updates the codebase
-while preserving local configuration files (*.local)
+while preserving user configuration files (*.local, pareConfig.py, pareNodeList.py)
 """
 
 import os
@@ -23,12 +23,14 @@ class ParedicmaUpdater:
     
     # Files/patterns to preserve (not to be overwritten)
     PRESERVE_PATTERNS = [
-        "*.local",      # Local configuration files
-        ".env",         # Environment variables
-        ".git*",        # Git files
-        "__pycache__",  # Python cache
-        ".venv",        # Virtual environment
-        ".vscode",      # VS Code settings
+        "*.default",            # Default configuration files (pareConfig.py.default, pareNodeList.py.default, etc.)
+        ".env",                 # Environment variables
+        ".git*",                # Git files
+        "__pycache__",          # Python cache
+        ".venv",                # Virtual environment
+        ".vscode",              # VS Code settings
+        "pareConfig.py",        # User's custom pareConfig.py
+        "pareNodeList.py",      # User's custom pareNodeList.py
     ]
     
     def __init__(self, project_dir: str = None):
@@ -62,7 +64,8 @@ class ParedicmaUpdater:
                 import fnmatch
                 if fnmatch.fnmatch(name, pattern):
                     return True
-            elif name == pattern or filepath.name.startswith(pattern):
+            elif name == pattern:
+                # Exact match only for non-wildcard patterns
                 return True
         return False
     

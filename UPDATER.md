@@ -56,7 +56,9 @@ python3 check_updates.py --json
 ## 🔒 Protected Files (Never Modified)
 
 The updater **always protects**:
-- `*.local` files (pareConfig.py.local, pareNodeList.py.local, etc.)
+- `*.default` files (pareConfig.py.default, pareNodeList.py.default, etc.)
+- `pareConfig.py` - User's custom configuration
+- `pareNodeList.py` - User's custom node list
 - `.env` files
 - `.git` repository
 - `.venv` virtual environment
@@ -381,12 +383,14 @@ start_periodic_check(interval_minutes=60)  # Check hourly
 The updater uses these patterns to protect files:
 ```python
 PRESERVE_PATTERNS = [
-    "*.local",      # Local configuration files
-    ".env",         # Environment variables
-    ".git*",        # Git files
-    "__pycache__",  # Python cache
-    ".venv",        # Virtual environment
-    ".vscode",      # VS Code settings
+    "*.default",            # Default configuration files
+    ".env",                 # Environment variables
+    ".git*",                # Git files
+    "__pycache__",          # Python cache
+    ".venv",                # Virtual environment
+    ".vscode",              # VS Code settings
+    "pareConfig.py",        # User's custom pareConfig.py
+    "pareNodeList.py",      # User's custom pareNodeList.py
 ]
 ```
 
@@ -394,12 +398,14 @@ PRESERVE_PATTERNS = [
 To protect additional files, edit `updater.py`:
 ```python
 PRESERVE_PATTERNS = [
-    "*.local",
+    "*.default",
     ".env",
     ".git*",
     "__pycache__",
     ".venv",
     ".vscode",
+    "pareConfig.py",
+    "pareNodeList.py",
     "my_custom_file.txt",  # Add here
     "custom_*.conf",       # Or use patterns
 ]
@@ -448,8 +454,12 @@ git checkout <commit-hash>  # Rollback to specific version
 
 ## ❓ FAQ
 
-**Q: Will my local files be overwritten?**  
-A: No! All `*.local` files are protected automatically. Your `pareConfig.py.local` and `pareNodeList.py.local` are always safe.
+**Q: Will my custom configuration files be overwritten?**  
+A: No! Your custom configuration files are always protected:
+   - `pareConfig.py` - Your custom configuration
+   - `pareNodeList.py` - Your custom node list
+   - `*.default` files - Default templates (pareConfig.py.default, pareNodeList.py.default, etc.)
+   - All are automatically protected from being overwritten
 
 **Q: How do I preview changes?**  
 A: Run `./update.sh --dry-run` to see what will change without modifying anything.
