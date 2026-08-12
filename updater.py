@@ -30,6 +30,7 @@ class ParedicmaUpdater:
         ".vscode",              # VS Code settings
         "pareConfig.py",        # User's custom pareConfig.py
         "pareNodeList.py",      # User's custom pareNodeList.py
+        "update.sh",            # Local updater wrapper with version check
     ]
     
     def __init__(self, project_dir: str = None):
