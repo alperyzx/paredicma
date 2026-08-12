@@ -198,14 +198,22 @@ class ParedicmaUpdater:
         Returns:
             Number of files updated
         """
+        import stat
         count = 0
         for src, dest in files_to_update:
             try:
                 # Create parent directories if needed
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 
-                # Copy file
+                # Copy file with metadata
                 shutil.copy2(src, dest)
+                
+                # Preserve executable bit for scripts
+                src_stat = src.stat()
+                if src_stat.st_mode & stat.S_IXUSR:  # If source is executable
+                    dest_mode = dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                    dest.chmod(dest_mode)
+                
                 count += 1
             except Exception as e:
                 self.print_status(f"Failed to update {dest.relative_to(self.project_dir)}: {str(e)}", "WARN")
