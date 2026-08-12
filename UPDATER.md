@@ -56,7 +56,6 @@ python3 check_updates.py --json
 ## 🔒 Protected Files (Never Modified)
 
 The updater **always protects**:
-- `*.default` files (pareConfig.py.default, pareNodeList.py.default, etc.)
 - `pareConfig.py` - User's custom configuration
 - `pareNodeList.py` - User's custom node list
 - `.env` files
@@ -64,6 +63,13 @@ The updater **always protects**:
 - `.venv` virtual environment
 - `.vscode` settings
 - `__pycache__` directories
+
+## 📝 Files That Are Updated
+
+The updater **always updates** (from the repository):
+- `pareConfig.py.default` - Default configuration template
+- `pareNodeList.py.default` - Default node list template
+- All other project code files
 
 ---
 
@@ -383,7 +389,6 @@ start_periodic_check(interval_minutes=60)  # Check hourly
 The updater uses these patterns to protect files:
 ```python
 PRESERVE_PATTERNS = [
-    "*.default",            # Default configuration files
     ".env",                 # Environment variables
     ".git*",                # Git files
     "__pycache__",          # Python cache
@@ -398,7 +403,6 @@ PRESERVE_PATTERNS = [
 To protect additional files, edit `updater.py`:
 ```python
 PRESERVE_PATTERNS = [
-    "*.default",
     ".env",
     ".git*",
     "__pycache__",
@@ -456,10 +460,12 @@ git checkout <commit-hash>  # Rollback to specific version
 
 **Q: Will my custom configuration files be overwritten?**  
 A: No! Your custom configuration files are always protected:
-   - `pareConfig.py` - Your custom configuration
-   - `pareNodeList.py` - Your custom node list
-   - `*.default` files - Default templates (pareConfig.py.default, pareNodeList.py.default, etc.)
-   - All are automatically protected from being overwritten
+   - `pareConfig.py` - Your custom configuration (PROTECTED)
+   - `pareNodeList.py` - Your custom node list (PROTECTED)
+   
+   However, default templates ARE updated:
+   - `pareConfig.py.default` - Updated to latest version
+   - `pareNodeList.py.default` - Updated to latest version
 
 **Q: How do I preview changes?**  
 A: Run `./update.sh --dry-run` to see what will change without modifying anything.

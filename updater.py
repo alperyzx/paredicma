@@ -23,7 +23,6 @@ class ParedicmaUpdater:
     
     # Files/patterns to preserve (not to be overwritten)
     PRESERVE_PATTERNS = [
-        "*.default",            # Default configuration files (pareConfig.py.default, pareNodeList.py.default, etc.)
         ".env",                 # Environment variables
         ".git*",                # Git files
         "__pycache__",          # Python cache
@@ -165,14 +164,20 @@ class ParedicmaUpdater:
         # Find files in project that don't exist in the archive (for removal)
         for project_file in self.project_dir.rglob("*"):
             if project_file.is_file():
-                # Skip certain directories and preserved files
+                # Skip certain directories
                 if any(part in project_file.parts for part in ['__pycache__', '.git', '.venv', 'docs', '.vscode']):
                     continue
                 
+                rel_path = project_file.relative_to(self.project_dir)
+                
+                # Check if should preserve (for files not in archive)
                 if self.should_preserve(project_file):
+                    # Add preserved files to the preserved list even if not in archive
+                    extracted_equiv = self.extract_dir / rel_path
+                    if not extracted_equiv.exists():
+                        files_preserved.append(str(rel_path))
                     continue
                 
-                rel_path = project_file.relative_to(self.project_dir)
                 extracted_equiv = self.extract_dir / rel_path
                 
                 # If file doesn't exist in archive, mark for removal
