@@ -6,15 +6,17 @@
 
 import os
 import sys  # Ensure sys is imported for module reloading
+from typing import Optional
 
-from pareConfig import *
-from pareNodeList import *
-from pareFunc import *
-from pareFuncWeb import *
+from pareConfig import *  # type: ignore[reportGeneralTypeIssues]  # noqa: F401, F403, F811
+from pareNodeList import *  # type: ignore[reportGeneralTypeIssues]  # noqa: F401, F403, F811
+from pareFunc import *  # type: ignore[reportGeneralTypeIssues]  # noqa: F401, F403, F811
+from pareFuncWeb import *  # type: ignore[reportGeneralTypeIssues]  # noqa: F401, F403, F811
 
-from fastapi import *
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, APIRouter, Request, HTTPException, Query
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from subprocess import getstatusoutput
+import subprocess
 from time import sleep  # Import sleep
 from contextlib import asynccontextmanager
 import pareAuth
@@ -5120,7 +5122,7 @@ async def maintain_copy_redis_binaries(
         return HTMLResponse(content=error_html, status_code=500)
 
 @app.get("/maintain/restart-slaves/", response_class=HTMLResponse)
-async def maintain_restart_slaves(wait_seconds: int = 30, redis_version: str = None, confirmed: bool = False):
+async def maintain_restart_slaves(wait_seconds: int = 30, redis_version: Optional[str] = None, confirmed: bool = False):
     """
     Endpoint to restart all slave nodes with a specified delay between restarts.
     If redis_version is provided, updates the nodes to use that version.
@@ -6007,7 +6009,7 @@ async def maker_preview(replication_number: int = 1):
 
 @app.get("/maker/create-cluster/", response_class=HTMLResponse)
 async def maker_create_cluster(
-    redis_version: str = None,
+    redis_version: Optional[str] = None,
     replication_number: int = 1,
     skip_compile: bool = False,
     skip_start: bool = False
@@ -6129,7 +6131,8 @@ async def login_post(request: Request):
 @app.get("/logout")
 async def logout(request: Request):
     token = request.cookies.get("pare_session")
-    pareAuth.do_logout(token)
+    if token:
+        pareAuth.do_logout(token)
     resp = RedirectResponse(url="/login", status_code=302)
     resp.delete_cookie("pare_session")
     return resp
