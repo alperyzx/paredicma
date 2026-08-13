@@ -14,7 +14,7 @@ Your paredicma project includes an automatic update system that downloads the la
 ./run.sh --update
 ```
 
-That's it! Your `.local` files are protected automatically.
+That's it! Your custom configuration files are protected automatically.
 
 ---
 
@@ -28,7 +28,8 @@ That's it! Your `.local` files are protected automatically.
 ### Key Features
 ✅ Automatic GitHub downloads  
 ✅ Safe dry-run mode  
-✅ Preserves local *.local files  
+✅ Preserves custom configuration files  
+✅ Updates default configuration templates
 ✅ Removes obsolete files  
 ✅ User confirmation required  
 ✅ No external dependencies  
@@ -479,8 +480,8 @@ A: You can rollback using git: `git checkout HEAD~1`
 **Q: How much disk space is needed?**  
 A: About 2 MB for download and temporary extraction.
 
-**Q: Does it work with my .local files?**  
-A: Yes! They're completely protected automatically.
+**Q: Does it work with my custom configuration files?**  
+A: Yes! Your `pareConfig.py` and `pareNodeList.py` are completely protected automatically. The `.default` template files are updated but your custom versions are preserved.
 
 **Q: Can I schedule updates?**  
 A: Yes! Multiple methods shown above (cron, systemd, GitHub Actions, etc.)
@@ -498,7 +499,7 @@ A: Yes! It's safe to run the updater as often as you like. It won't duplicate ch
 
 ## 🔐 Security & Safety
 
-- **File Permissions**: The `.local` files are protected by filename pattern matching
+- **File Permissions**: Custom configuration files (pareConfig.py, pareNodeList.py) are protected by filename pattern matching
 - **Network**: Uses HTTPS for GitHub downloads
 - **Local Execution**: All updates happen locally, no credentials transmitted
 - **Confirmation**: User confirmation is required before any modifications
@@ -516,7 +517,8 @@ A: Yes! It's safe to run the updater as often as you like. It won't duplicate ch
 - `.json`, `.yml`, `.yaml` (Config files)
 
 ### Files Preserved
-- `*.local` files (Your local config)
+- `pareConfig.py` - Your custom configuration
+- `pareNodeList.py` - Your custom node list
 - `.env` files (Environment)
 - `.git*` files (Repository)
 - Virtual environment
@@ -541,9 +543,9 @@ A: Yes! It's safe to run the updater as often as you like. It won't duplicate ch
    ./run.sh --update
    ```
 
-4. **Verify** your local files still exist:
+4. **Verify** your custom configuration files still exist:
    ```bash
-   ls -la pareConfig.py.local pareNodeList.py.local
+   ls -la pareConfig.py pareNodeList.py
    ```
 
 5. **Set up automation** (optional):
@@ -577,9 +579,9 @@ For issues or questions:
 - [ ] Read this guide (you're reading it!)
 - [ ] Run dry-run: `./run.sh --update --dry-run`
 - [ ] Review the file list shown
-- [ ] Check that your `.local` files are listed as "preserved"
+- [ ] Check that your custom config files are listed as "preserved"
 - [ ] Apply update: `./run.sh --update`
-- [ ] Verify local files still exist: `ls pareConfig.py.local`
+- [ ] Verify custom files still exist: `ls pareConfig.py pareNodeList.py`
 
 ---
 

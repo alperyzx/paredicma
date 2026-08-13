@@ -2,7 +2,7 @@
 """
 Paredicma Project Updater
 Downloads the latest version from GitHub and updates the codebase
-while preserving user configuration files (*.local, pareConfig.py, pareNodeList.py)
+while preserving user configuration files (pareConfig.py, pareNodeList.py)
 """
 
 import os
