@@ -224,12 +224,15 @@ class ParedicmaUpdater:
     
     def ensure_scripts_executable(self) -> None:
         """
-        Ensure all shell scripts and Python scripts have executable permissions
+        Ensure shell scripts have executable permissions
         This is needed because GitHub archives don't preserve executable bits
+        Only run.sh needs to be executable (it's called directly with ./run.sh)
+        Python scripts are called as 'python3 updater.py' and don't need +x
         """
         import stat
         
-        script_files = ['run.sh', 'updater.py', 'check_updates.py']
+        # Only run.sh needs to be executable (called directly with ./run.sh)
+        script_files = ['run.sh']
         
         for script_name in script_files:
             try:
