@@ -7,6 +7,7 @@ while preserving user configuration files (*.local, pareConfig.py, pareNodeList.
 
 import os
 import sys
+import stat
 import shutil
 import urllib.request
 import zipfile
@@ -221,6 +222,26 @@ class ParedicmaUpdater:
         
         return count
     
+    def ensure_scripts_executable(self) -> None:
+        """
+        Ensure all shell scripts and Python scripts have executable permissions
+        This is needed because GitHub archives don't preserve executable bits
+        """
+        import stat
+        
+        script_files = ['run.sh', 'updater.py', 'check_updates.py']
+        
+        for script_name in script_files:
+            try:
+                script_path = self.project_dir / script_name
+                if script_path.exists():
+                    # Add executable permissions for user, group, and others
+                    current_mode = script_path.stat().st_mode
+                    new_mode = current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                    script_path.chmod(new_mode)
+            except Exception as e:
+                self.print_status(f"Warning: Could not set executable permission for {script_name}: {str(e)}", "WARN")
+    
     def remove_obsolete_files(self, files_to_remove: list) -> int:
         """
         Remove files that are no longer in the archive
@@ -310,6 +331,9 @@ class ParedicmaUpdater:
             self.print_status("Updating files...")
             updated = self.update_files(files_to_update)
             self.print_status(f"Updated {updated} files")
+            
+            # Ensure script files are executable
+            self.ensure_scripts_executable()
             
             # Remove obsolete files
             if files_to_remove:
