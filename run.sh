@@ -210,6 +210,59 @@ if [[ "$VIRTUAL_ENV" == "" || $venv_created -eq 1 ]]; then
     check_and_install_packages $PYTHON_CMD
 fi
 
+# Check for available updates
+check_for_updates() {
+    local python_cmd=$1
+    
+    echo ""
+    echo "Checking for updates..."
+    
+    # Run check_updates.py and capture output
+    if [ -f "check_updates.py" ]; then
+        update_result=$($python_cmd check_updates.py 2>/dev/null)
+        exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
+            # Exit code 0 means updates are available
+            echo ""
+            echo "╔════════════════════════════════════════════╗"
+            echo "║     ⚠️  UPDATE AVAILABLE                   ║"
+            echo "╚════════════════════════════════════════════╝"
+            echo ""
+            echo "A new version of Paredicma is available!"
+            echo ""
+            
+            read -p "Would you like to update now before starting? (y/n): " update_choice
+            if [[ "$update_choice" =~ ^[Yy]$ ]]; then
+                if [ -f "update.sh" ]; then
+                    echo ""
+                    chmod +x update.sh
+                    ./update.sh
+                    if [ $? -eq 0 ]; then
+                        echo ""
+                        echo "✅ Update completed! Restarting application..."
+                        echo ""
+                        # Restart the application after update
+                        exec "$0" "$@"
+                    else
+                        echo ""
+                        echo "❌ Update failed. Starting application with current version..."
+                        echo ""
+                    fi
+                else
+                    echo "update.sh not found. Skipping update."
+                fi
+            else
+                echo "Skipping update. Starting application..."
+                echo ""
+            fi
+        fi
+    fi
+}
+
+# Check for updates before running the application
+check_for_updates $PYTHON_CMD
+
 # Run the application
 echo "Launching Paredicma Web Interface..."
 
