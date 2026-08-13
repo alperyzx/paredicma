@@ -23,14 +23,15 @@ class ParedicmaUpdater:
     
     # Files/patterns to preserve (not to be overwritten)
     PRESERVE_PATTERNS = [
-        ".env",                 # Environment variables
-        ".git*",                # Git files
-        "__pycache__",          # Python cache
-        ".venv",                # Virtual environment
-        ".vscode",              # VS Code settings
-        "pareConfig.py",        # User's custom pareConfig.py
-        "pareNodeList.py",      # User's custom pareNodeList.py
-        "update.sh",            # Local updater wrapper with version check
+        ".env",                         # Environment variables
+        ".git*",                        # Git files
+        ".last_update_version",         # Version marker file from updater
+        "__pycache__",                  # Python cache
+        ".venv",                        # Virtual environment
+        ".vscode",                      # VS Code settings
+        "pareConfig.py",                # User's custom pareConfig.py
+        "pareNodeList.py",              # User's custom pareNodeList.py
+        "update.sh",                    # Local updater wrapper with version check
     ]
     
     def __init__(self, project_dir: str = None):
@@ -317,7 +318,11 @@ class ParedicmaUpdater:
                 removed = self.remove_obsolete_files(files_to_remove)
                 self.print_status(f"Removed {removed} obsolete files")
             
-            # Success
+            # Success - save the remote version marker
+            remote_version = self.get_remote_version()
+            if remote_version:
+                self.save_remote_version_marker(remote_version)
+            
             self.print_status("=" * 60)
             self.print_status("Update completed successfully!", "SUCCESS")
             self.print_status("=" * 60)
@@ -329,6 +334,42 @@ class ParedicmaUpdater:
             return False
         finally:
             self.cleanup()
+    
+    def save_remote_version_marker(self, remote_version: str) -> bool:
+        """
+        Save the remote version as a marker file after successful update
+        This allows check_updates.py to know what version was just installed
+        
+        Args:
+            remote_version: The remote commit hash
+            
+        Returns:
+            True if saved successfully, False otherwise
+        """
+        try:
+            marker_file = self.project_dir / ".last_update_version"
+            marker_file.write_text(remote_version.strip())
+            return True
+        except Exception as e:
+            self.print_status(f"Warning: Could not save version marker: {str(e)}", "WARN")
+            return False
+    
+    def get_remote_version(self) -> str:
+        """
+        Get the current remote master branch version from GitHub API
+        
+        Returns:
+            Commit hash (first 7 chars) or empty string if fetch fails
+        """
+        try:
+            url = "https://api.github.com/repos/alperyzx/paredicma/commits/master"
+            with urllib.request.urlopen(url, timeout=5) as response:
+                import json
+                data = json.loads(response.read().decode())
+                return data['sha'][:7]
+        except Exception as e:
+            self.print_status(f"Warning: Could not get remote version: {str(e)}", "WARN")
+            return ""
 
 
 def main():

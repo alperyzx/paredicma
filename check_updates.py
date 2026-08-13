@@ -14,17 +14,20 @@ import sys
 
 def get_local_version() -> str:
     """
-    Get the local project version from git or file content hash
-    
-    Falls back to hashing key files if git doesn't work (for manually updated installations)
+    Get the local project version from multiple sources in order of preference:
+    1. Git commit hash (most reliable)
+    2. Version marker file left by updater.py after successful update
+    3. File content hash (for manually updated installations)
     """
+    project_dir = Path(__file__).parent
+    
+    # Method 1: Try git first (most reliable)
     try:
-        # Try to get from git first
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True,
             text=True,
-            cwd=Path(__file__).parent,
+            cwd=project_dir,
             timeout=5
         )
         if result.returncode == 0:
@@ -34,10 +37,20 @@ def get_local_version() -> str:
     except:
         pass
     
-    # Fallback: Hash key files to detect manual updates
+    # Method 2: Check for version marker file (set after successful updater.py run)
+    try:
+        marker_file = project_dir / ".last_update_version"
+        if marker_file.exists():
+            with open(marker_file, 'r') as f:
+                marker_version = f.read().strip()
+                if marker_version and len(marker_version) >= 7:
+                    return marker_version[:7]
+    except:
+        pass
+    
+    # Method 3: Fallback to hashing key files to detect manual updates
     try:
         import hashlib
-        project_dir = Path(__file__).parent
         key_files = [
             "parewebMon.py",
             "paredicma.py",
