@@ -13,17 +13,50 @@ import sys
 
 
 def get_local_version() -> str:
-    """Get the local project version from git or file"""
+    """
+    Get the local project version from git or file content hash
+    
+    Falls back to hashing key files if git doesn't work (for manually updated installations)
+    """
     try:
-        # Try to get from git
+        # Try to get from git first
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True,
             text=True,
-            cwd=Path(__file__).parent
+            cwd=Path(__file__).parent,
+            timeout=5
         )
         if result.returncode == 0:
-            return result.stdout.strip()
+            git_version = result.stdout.strip()
+            if git_version and git_version != "":
+                return git_version
+    except:
+        pass
+    
+    # Fallback: Hash key files to detect manual updates
+    try:
+        import hashlib
+        project_dir = Path(__file__).parent
+        key_files = [
+            "parewebMon.py",
+            "paredicma.py",
+            "pareFunc.py",
+            "README.md",
+        ]
+        
+        file_hashes = []
+        for filename in key_files:
+            filepath = project_dir / filename
+            if filepath.exists():
+                with open(filepath, 'rb') as f:
+                    file_hash = hashlib.md5(f.read()).hexdigest()[:7]
+                    file_hashes.append(file_hash)
+        
+        if file_hashes:
+            # Combine hashes and take first 7 chars
+            combined = "".join(file_hashes)
+            return hashlib.md5(combined.encode()).hexdigest()[:7]
     except:
         pass
     
@@ -41,6 +74,21 @@ def get_remote_version() -> str:
         return f"error: {str(e)}"
 
 
+def is_git_repo() -> bool:
+    """Check if the project is a git repository"""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent,
+            timeout=5
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+
 def check_updates(verbose: bool = False) -> dict:
     """
     Check if updates are available
@@ -54,10 +102,16 @@ def check_updates(verbose: bool = False) -> dict:
     local_version = get_local_version()
     remote_version = get_remote_version()
     
+    # For git repos: trust git version
+    # For non-git (manually updated): use file hash comparison
+    is_git = is_git_repo()
+    
     updates_available = (
         local_version != remote_version and 
         not local_version.startswith("error") and 
-        not remote_version.startswith("error")
+        not remote_version.startswith("error") and
+        local_version != "unknown" and
+        remote_version != "unknown"
     )
     
     result = {
@@ -65,15 +119,19 @@ def check_updates(verbose: bool = False) -> dict:
         "local_version": local_version,
         "remote_version": remote_version,
         "updates_available": updates_available,
+        "is_git_repo": is_git,
         "update_url": "https://github.com/alperyzx/paredicma/archive/refs/heads/master.zip"
     }
     
     if verbose:
         print(f"Local version:  {local_version}")
         print(f"Remote version: {remote_version}")
+        print(f"Git repository: {'Yes' if is_git else 'No (using file hash)'}")
         print(f"Updates available: {'Yes' if updates_available else 'No'}")
         if updates_available:
             print(f"\nRun './update.sh' to update to the latest version")
+        elif local_version == "unknown" or remote_version == "unknown":
+            print("\nWarning: Could not determine version. Run update.sh --force to update anyway.")
     
     return result
 
