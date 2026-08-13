@@ -304,6 +304,8 @@ check_for_updates() {
                     echo ""
                     echo "✅ Update completed! Restarting application..."
                     echo ""
+                    # Clean up PID file before restart (will be recreated by new instance)
+                    rm -f "$PID_FILE"
                     # Restart the application after update
                     exec "$0" "$@"
                 else
