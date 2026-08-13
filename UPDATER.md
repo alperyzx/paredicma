@@ -6,12 +6,12 @@ Your paredicma project includes an automatic update system that downloads the la
 
 ### One-Command Preview (Safe - No Changes)
 ```bash
-./update.sh --dry-run
+./run.sh --update --dry-run
 ```
 
 ### Apply Update
 ```bash
-./update.sh
+./run.sh --update
 ```
 
 That's it! Your `.local` files are protected automatically.
@@ -22,7 +22,7 @@ That's it! Your `.local` files are protected automatically.
 
 ### Executable Scripts
 - **`updater.py`** (12 KB) - Main Python updater with full features
-- **`update.sh`** (598 B) - Shell wrapper for easy access
+- **`run.sh`** - Main entry point with built-in update support
 - **`check_updates.py`** (2.7 KB) - Check for updates without downloading
 
 ### Key Features
@@ -39,10 +39,10 @@ That's it! Your `.local` files are protected automatically.
 
 ```bash
 # Preview changes (recommended first)
-./update.sh --dry-run
+./run.sh --update --dry-run
 
 # Apply the update
-./update.sh
+./run.sh --update
 
 # Check if updates exist (without downloading)
 python3 check_updates.py --verbose
@@ -84,7 +84,7 @@ The updater **always updates** (from the repository):
 5. **Asks for confirmation** before proceeding
 6. **Updates** Python files, docs, and scripts
 7. **Removes** obsolete files
-8. **Preserves** all your `.local` files
+8. **Preserves** your custom config files (pareConfig.py, pareNodeList.py)
 9. **Cleans up** temporary files
 
 ### Download Source
@@ -99,7 +99,7 @@ https://github.com/alperyzx/paredicma/archive/refs/heads/master.zip
 ### Workflow 1: Manual Update (Recommended First-Time)
 ```bash
 # Step 1: Preview
-$ ./update.sh --dry-run
+$ ./run.sh --update --dry-run
 
 [2026-08-12 15:30:45] [INFO] Files to update: 8
 [2026-08-12 15:30:45] [INFO] Files to remove: 0
@@ -108,7 +108,7 @@ $ ./update.sh --dry-run
 # Step 2: Review the changes
 
 # Step 3: Apply
-$ ./update.sh
+$ ./run.sh --update
 Proceed with update? (yes/no): yes
 
 [2026-08-12 15:30:48] [SUCCESS] Update completed successfully!
@@ -120,7 +120,7 @@ Proceed with update? (yes/no): yes
 crontab -e
 
 # Add this line (updates at 2 AM every day)
-0 2 * * * cd /home/alper/Projects/paredicma && ./update.sh >/dev/null 2>&1
+0 2 * * * cd /home/alper/Projects/paredicma && ./run.sh --update >/dev/null 2>&1
 
 # Verify it was added
 crontab -l
@@ -132,7 +132,7 @@ crontab -l
 crontab -e
 
 # Add this line (updates at 2 AM every Sunday)
-0 2 * * 0 cd /home/alper/Projects/paredicma && ./update.sh >/dev/null 2>&1
+0 2 * * 0 cd /home/alper/Projects/paredicma && ./run.sh --update >/dev/null 2>&1
 ```
 
 ### Workflow 4: Update with Logging
@@ -144,7 +144,7 @@ mkdir -p ~/.logs
 crontab -e
 
 # Add with logging
-0 2 * * * cd /home/alper/Projects/paredicma && ./update.sh >> ~/.logs/paredicma-update.log 2>&1
+0 2 * * * cd /home/alper/Projects/paredicma && ./run.sh --update >> ~/.logs/paredicma-update.log 2>&1
 
 # View logs
 tail -f ~/.logs/paredicma-update.log
@@ -170,7 +170,7 @@ cd "$BACKUP_DIR"
 ls -t *.tar.gz | tail -n +11 | xargs rm -f
 
 # Now update
-"$PROJECT_DIR/update.sh"
+"$PROJECT_DIR/run.sh" --update
 ```
 
 ---
@@ -185,7 +185,7 @@ WORKDIR /app
 COPY . .
 
 RUN pip install -r requirements.txt && \
-    chmod +x update.sh updater.py
+    chmod +x run.sh updater.py
 
 CMD python3 paredicma.py
 ```
@@ -212,7 +212,7 @@ async def check_updates():
 async def apply_updates():
     """Apply pending updates"""
     result = subprocess.run(
-        ["./update.sh"],
+        ["./run.sh", "--update"],
         capture_output=True,
         text=True,
         cwd="/home/alper/Projects/paredicma"
@@ -241,8 +241,8 @@ jobs:
           python-version: '3.9'
       - name: Run updater
         run: |
-          chmod +x update.sh
-          ./update.sh
+          chmod +x run.sh
+          ./run.sh --update
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
@@ -260,7 +260,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/home/alper/Projects/paredicma/update.sh
+ExecStart=/home/alper/Projects/paredicma/run.sh --update
 User=alper
 WorkingDirectory=/home/alper/Projects/paredicma
 StandardOutput=journal
@@ -297,9 +297,9 @@ sudo systemctl start paredicma-updater.timer
 
 ### Example 1: Simple Manual Update
 ```bash
-$ ./update.sh --dry-run
+$ ./run.sh --update --dry-run
 # Review changes...
-$ ./update.sh
+$ ./run.sh --update
 Proceed with update? (yes/no): yes
 # Done!
 ```
@@ -311,14 +311,14 @@ Local version:  7d3a1f2
 Remote version: 8b9c4e1
 Updates available: Yes
 
-Run './update.sh' to update to the latest version
+Run './run.sh --update' to update to the latest version
 ```
 
 ### Example 3: Conditional Update
 ```bash
 if python3 check_updates.py &>/dev/null; then
     echo "Updates available, applying..."
-    ./update.sh
+    ./run.sh --update
 else
     echo "Already up to date"
 fi
@@ -326,7 +326,7 @@ fi
 
 ### Example 4: Update with Notification
 ```bash
-RESULT=$(./update.sh)
+RESULT=$(./run.sh --update)
 STATUS=$?
 
 if [ $STATUS -eq 0 ]; then
@@ -338,7 +338,7 @@ fi
 
 ### Example 5: Graceful Restart After Update
 ```bash
-./update.sh && \
+./run.sh --update && \
 echo "Update successful, restarting service..." && \
 systemctl restart paredicma
 ```
@@ -435,7 +435,7 @@ brew install python3         # macOS
 ### Problem: "Permission denied"
 **Solution:**
 ```bash
-chmod +x update.sh updater.py check_updates.py
+chmod +x run.sh updater.py check_updates.py
 ```
 
 ### Problem: "Certificate verify failed"
@@ -468,7 +468,7 @@ A: No! Your custom configuration files are always protected:
    - `pareNodeList.py.default` - Updated to latest version
 
 **Q: How do I preview changes?**  
-A: Run `./update.sh --dry-run` to see what will change without modifying anything.
+A: Run `./run.sh --update --dry-run` to see what will change without modifying anything.
 
 **Q: Can I automate updates?**  
 A: Yes! Use cron, systemd, Docker, GitHub Actions, or any other scheduler. See integration examples above.
@@ -531,14 +531,14 @@ A: Yes! It's safe to run the updater as often as you like. It won't duplicate ch
 
 1. **Try a dry-run** (safe, no changes):
    ```bash
-   ./update.sh --dry-run
+   ./run.sh --update --dry-run
    ```
 
 2. **Review the changes** shown in the output
 
 3. **Apply the update** if satisfied:
    ```bash
-   ./update.sh
+   ./run.sh --update
    ```
 
 4. **Verify** your local files still exist:
@@ -575,10 +575,10 @@ For issues or questions:
 ## ✅ Checklist Before First Update
 
 - [ ] Read this guide (you're reading it!)
-- [ ] Run dry-run: `./update.sh --dry-run`
+- [ ] Run dry-run: `./run.sh --update --dry-run`
 - [ ] Review the file list shown
 - [ ] Check that your `.local` files are listed as "preserved"
-- [ ] Apply update: `./update.sh`
+- [ ] Apply update: `./run.sh --update`
 - [ ] Verify local files still exist: `ls pareConfig.py.local`
 
 ---
@@ -586,4 +586,4 @@ For issues or questions:
 **Status**: ✅ Ready to Use  
 **Last Updated**: August 12, 2026
 
-Start with: `./update.sh --dry-run`
+Start with: `./run.sh --update --dry-run`

@@ -284,23 +284,19 @@ check_for_updates() {
             
             read -p "Would you like to update now before starting? (y/n): " update_choice
             if [[ "$update_choice" =~ ^[Yy]$ ]]; then
-                if [ -f "update.sh" ]; then
+                echo ""
+                # Call run.sh with --update flag recursively (this script can handle it)
+                "$0" --update
+                if [ $? -eq 0 ]; then
                     echo ""
-                    chmod +x update.sh
-                    ./update.sh
-                    if [ $? -eq 0 ]; then
-                        echo ""
-                        echo "✅ Update completed! Restarting application..."
-                        echo ""
-                        # Restart the application after update
-                        exec "$0" "$@"
-                    else
-                        echo ""
-                        echo "❌ Update failed. Starting application with current version..."
-                        echo ""
-                    fi
+                    echo "✅ Update completed! Restarting application..."
+                    echo ""
+                    # Restart the application after update
+                    exec "$0" "$@"
                 else
-                    echo "update.sh not found. Skipping update."
+                    echo ""
+                    echo "❌ Update failed. Starting application with current version..."
+                    echo ""
                 fi
             else
                 echo "Skipping update. Starting application..."

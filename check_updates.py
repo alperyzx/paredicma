@@ -142,9 +142,9 @@ def check_updates(verbose: bool = False) -> dict:
         print(f"Git repository: {'Yes' if is_git else 'No (using file hash)'}")
         print(f"Updates available: {'Yes' if updates_available else 'No'}")
         if updates_available:
-            print(f"\nRun './update.sh' to update to the latest version")
+            print(f"\nRun './run.sh --update' to update to the latest version")
         elif local_version == "unknown" or remote_version == "unknown":
-            print("\nWarning: Could not determine version. Run update.sh --force to update anyway.")
+            print("\nWarning: Could not determine version. Run './run.sh --update --force' to update anyway.")
     
     return result
 
