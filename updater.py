@@ -322,7 +322,7 @@ class ParedicmaUpdater:
             
             # Confirm with user
             response = input("\nProceed with update? (yes/no): ").strip().lower()
-            if response != "yes":
+            if response not in ["yes", "y"]:
                 self.print_status("Update cancelled by user")
                 self.cleanup()
                 return False
