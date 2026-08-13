@@ -121,17 +121,30 @@ except Exception:
 PID_FILE="./run.pid"
 SERVER_IP=$(get_local_ip)
 
+# Function to check if a process is actually running
+is_process_running() {
+    local pid=$1
+    if ps -p $pid > /dev/null 2>&1; then
+        # Process exists, verify it's actually our app (not a zombie/stale process)
+        local cmd=$(ps -p $pid -o cmd= 2>/dev/null)
+        if [[ "$cmd" == *"parewebMon.py"* ]] || [[ "$cmd" == *"python"* ]]; then
+            return 0  # Process is running
+        fi
+    fi
+    return 1  # Process is not running
+}
+
 if [ -f "$PID_FILE" ]; then
     read existing_pid existing_port < "$PID_FILE"
     if [ -z "$existing_port" ]; then
         existing_port=8000
     fi
-    if ps -p $existing_pid > /dev/null 2>&1; then
+    if is_process_running $existing_pid; then
         echo "Paredicma Web Interface is already running (PID: $existing_pid)."
         echo "Access it at: http://$SERVER_IP:$existing_port"
         exit 1
     else
-        # Stale PID file
+        # Stale PID file - remove it
         rm -f "$PID_FILE"
     fi
 fi
