@@ -2,6 +2,9 @@
 
 import secrets
 import string
+import hashlib
+import os
+from pathlib import Path
 
 # ── State (module-level singletons) ──────────────────────────────────────────
 APP_PASSWORD: str = ""
@@ -11,6 +14,18 @@ _locked: bool = False
 
 MAX_SESSIONS = 2
 MAX_FAILURES = 2
+
+
+def _session_cookie_name() -> str:
+    """Return a stable, installation-specific cookie name."""
+    instance_id = os.environ.get("PARE_INSTANCE_ID")
+    if not instance_id:
+        instance_id = str(Path(__file__).resolve().parent)
+    suffix = hashlib.sha256(instance_id.encode("utf-8")).hexdigest()[:12]
+    return f"pare_session_{suffix}"
+
+
+SESSION_COOKIE_NAME = _session_cookie_name()
 
 
 def generate_password(length: int = 8) -> str:

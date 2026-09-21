@@ -61,7 +61,7 @@ async def reload_nodes_middleware(request, call_next):
     # ── Auth gate ───────────────────────────────────────────────────────────
     _open = {"/login", "/favicon.ico"}
     if request.url.path not in _open:
-        _tok = request.cookies.get("pare_session")
+        _tok = request.cookies.get(pareAuth.SESSION_COOKIE_NAME)
         if not pareAuth.check_session(_tok):
             return RedirectResponse(url=f"{APP_PREFIX}/login", status_code=302)
 
@@ -6197,7 +6197,7 @@ def _login_html(locked: bool = False) -> str:
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    token = request.cookies.get("pare_session")
+    token = request.cookies.get(pareAuth.SESSION_COOKIE_NAME)
     if pareAuth.check_session(token):
         return RedirectResponse(url=f"{APP_PREFIX}/", status_code=302)
     return HTMLResponse(content=_login_html(locked=pareAuth.is_locked()))
@@ -6213,18 +6213,18 @@ async def login_post(request: Request):
     success, result = pareAuth.do_login(password)
     if success:
         resp = JSONResponse({"ok": True})
-        resp.set_cookie("pare_session", result, httponly=True, samesite="strict")
+        resp.set_cookie(pareAuth.SESSION_COOKIE_NAME, result, httponly=True, samesite="strict")
         return resp
     return JSONResponse({"ok": False, "reason": result, "attempts_left": pareAuth.attempts_left()})
 
 
 @app.get("/logout")
 async def logout(request: Request):
-    token = request.cookies.get("pare_session")
+    token = request.cookies.get(pareAuth.SESSION_COOKIE_NAME)
     if token:
         pareAuth.do_logout(token)
     resp = RedirectResponse(url=f"{APP_PREFIX}/login", status_code=302)
-    resp.delete_cookie("pare_session")
+    resp.delete_cookie(pareAuth.SESSION_COOKIE_NAME)
     return resp
 
 
