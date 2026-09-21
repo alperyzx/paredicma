@@ -4149,6 +4149,17 @@ async def maintain():
                 }});
         }}
 
+        let restartSlavesInProgress = false;
+
+        function setRestartSlavesButtonState(inProgress) {{
+            restartSlavesInProgress = inProgress;
+            const button = document.getElementById('restart-slaves-button');
+            if (button) {{
+                button.disabled = inProgress;
+                button.classList.toggle('btn-disabled', inProgress);
+            }}
+        }}
+
         function restartSlaveNodes() {{
             const versionInput = document.getElementById('redis_restart_version');
             const waitInput = document.getElementById('restart_wait_seconds');
@@ -4158,12 +4169,14 @@ async def maintain():
             // Validate wait seconds
             if (waitSeconds < 0) {{
                 document.getElementById('restart-slaves-result').innerHTML = '<div class="error-message"><p>Wait time cannot be negative</p></div>';
+                setRestartSlavesButtonState(false);
                 return;
             }}
             
             // Validate version format if specified
             if (version && !/^\\d+\\.\\d+\\.\\d+$/.test(version)) {{
                 document.getElementById('restart-slaves-result').innerHTML = '<div class="error-message"><p>Invalid version format. Use format like: 7.2.4</p></div>';
+                setRestartSlavesButtonState(false);
                 return;
             }}
             
@@ -4180,6 +4193,7 @@ async def maintain():
                 .catch(error => {{
                     document.getElementById('restart-slaves-result').innerHTML = 
                         `<div class="error-message"><p>Error processing request:</p><pre>${{error.message}}</pre></div>`;
+                        setRestartSlavesButtonState(false);
                 }});
         }}
 
@@ -4206,6 +4220,7 @@ async def maintain():
                                 document.getElementById('restart-progress').insertAdjacentHTML('beforeend', event.html);
                             }} else if (event.type === 'complete') {{
                                 resultElement.innerHTML = event.html;
+                                setRestartSlavesButtonState(false);
                             }}
                         }});
                     }}
@@ -4213,14 +4228,21 @@ async def maintain():
                 .catch(error => {{
                     resultElement.innerHTML =
                         `<div class="error-message"><p>Error restarting slave nodes:</p><pre>${{error.message}}</pre></div>`;
+                    setRestartSlavesButtonState(false);
                 }});
         }}
 
         function cancelRestartSlaves() {{
             document.getElementById('restart-slaves-result').innerHTML = '<p>Operation cancelled.</p>';
+            setRestartSlavesButtonState(false);
         }}
         
     function validateAndRestartSlaves() {{
+    if (restartSlavesInProgress) {{
+        return;
+    }}
+
+    setRestartSlavesButtonState(true);
     const versionField = document.getElementById('redis_restart_version');
     const resultElement = document.getElementById('restart-slaves-result');
     
@@ -4228,6 +4250,7 @@ async def maintain():
     if (!versionField.value.trim()) {{
         resultElement.innerHTML = '<div class="error-message">Redis version is required. Please enter a version number.</div>';
         versionField.focus();
+        setRestartSlavesButtonState(false);
         return;
     }}
     
@@ -4243,10 +4266,12 @@ async def maintain():
                 // Binary doesn't exist, show error
                 resultElement.innerHTML = `<div class="error-message">Redis ${{version}} binary not found at ${{data.path}}
                 <br>Please make sure to upload and compile the binary first!</div>`;
+                setRestartSlavesButtonState(false);
             }}
         }})
         .catch(error => {{
             resultElement.innerHTML = `<div class="error-message">Error verifying Redis binary: ${{error.message}}</div>`;
+            setRestartSlavesButtonState(false);
         }});
    }}
 
