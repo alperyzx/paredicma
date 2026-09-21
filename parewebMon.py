@@ -34,18 +34,33 @@ async def _lifespan(app):
 app = FastAPI(lifespan=_lifespan)
 router = APIRouter()
 
+APP_PREFIX = "/paredicma"
+
 @app.middleware("http")
 async def reload_nodes_middleware(request, call_next):
     """
     Middleware that reloads the pareNodes configuration before processing certain paths.
     This ensures the UI always shows the latest node configuration.
     """
+    # Strip the public application prefix before FastAPI matches the existing
+    # internal routes. Browser-facing links and API calls use APP_PREFIX.
+    original_path = request.scope["path"]
+    if original_path == APP_PREFIX or original_path.startswith(APP_PREFIX + "/"):
+        request.scope["path"] = request.scope["path"][len(APP_PREFIX):] or "/"
+        if request.scope.get("raw_path"):
+            request.scope["raw_path"] = request.scope["raw_path"][len(APP_PREFIX):] or b"/"
+    elif original_path == "/" or original_path == "/login" or original_path == "/logout" or any(
+        original_path == path or original_path.startswith(path + "/")
+        for path in ("/monitor", "/manager", "/maintain", "/maker", "/ai", "/refresh-config")
+    ):
+        return RedirectResponse(url=f"{APP_PREFIX}{original_path}", status_code=307)
+
     # ── Auth gate ───────────────────────────────────────────────────────────
     _open = {"/login", "/favicon.ico"}
     if request.url.path not in _open:
         _tok = request.cookies.get("pare_session")
         if not pareAuth.check_session(_tok):
-            return RedirectResponse(url="/login", status_code=302)
+            return RedirectResponse(url=f"{APP_PREFIX}/login", status_code=302)
 
     # List of paths that should trigger a configuration reload
     reload_paths = [
@@ -2035,7 +2050,7 @@ async def welcome_page():
                         <p>Key features include ping nodes, list nodes, check cluster slots, view memory usage and more.</p>
                     </div>
                     <div class="card-footer">
-                        <a href="/monitor" class="card-button">Go to Monitor</a>
+                        <a href="{APP_PREFIX}/monitor" class="card-button">Go to Monitor</a>
                     </div>
                 </div>
                 
@@ -2046,7 +2061,7 @@ async def welcome_page():
                         <p>Execute commands across all nodes, perform rolling restarts, and view Redis logs.</p>
                     </div>
                     <div class="card-footer">
-                        <a href="/manager" class="card-button">Go to Manager</a>
+                        <a href="{APP_PREFIX}/manager" class="card-button">Go to Manager</a>
                     </div>
                 </div>
                 
@@ -2057,7 +2072,7 @@ async def welcome_page():
                         <p>Manage cluster topology, migrate data, and balance slot distribution.</p>
                     </div>
                     <div class="card-footer">
-                        <a href="/maintain" class="card-button">Go to Maintenance</a>
+                        <a href="{APP_PREFIX}/maintain" class="card-button">Go to Maintenance</a>
                     </div>
                 </div>
                 
@@ -2068,7 +2083,7 @@ async def welcome_page():
                         <p>Validate nodes, preview configuration, and monitor cluster creation progress.</p>
                     </div>
                     <div class="card-footer">
-                        <a href="/maker" class="card-button">Go to Maker</a>
+                        <a href="{APP_PREFIX}/maker" class="card-button">Go to Maker</a>
                     </div>
                 </div>
             
@@ -2113,8 +2128,8 @@ async def monitor():
     <body>
     <h1 class="monitor-title">Redis Cluster Monitor - {projectName}</h1>
     <div class="nav-buttons">
-        <a href="/manager" class="manager-nav">Go to Manager</a>
-        <a href="/maintain" class="maintenance-nav">Go to Maintenance</a>
+        <a href="{APP_PREFIX}/manager" class="manager-nav">Go to Manager</a>
+        <a href="{APP_PREFIX}/maintain" class="maintenance-nav">Go to Maintenance</a>
         {_theme_toggle_html}
     </div>
     <hr>
@@ -2219,7 +2234,7 @@ async def monitor():
         }});
 
         function fetchPingNodes() {{
-            fetch('/monitor/ping-nodes/')
+            fetch('{APP_PREFIX}/monitor/ping-nodes/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('ping-nodes-result').innerHTML = data;
@@ -2230,7 +2245,7 @@ async def monitor():
         }}
 
         function fetchListNodes() {{
-            fetch('/monitor/list-nodes/')
+            fetch('{APP_PREFIX}/monitor/list-nodes/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('list-nodes-result').innerHTML = data;
@@ -2247,7 +2262,7 @@ async def monitor():
             
             document.getElementById('node-info-result').innerHTML = "<p>Loading...</p>";
             
-            fetch('/monitor/node-info/?' + params)
+            fetch('{APP_PREFIX}/monitor/node-info/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('node-info-result').innerHTML = data;
@@ -2261,7 +2276,7 @@ async def monitor():
             event.preventDefault();
             const formData = new FormData(document.getElementById('server-info-form'));
             const params = new URLSearchParams(formData).toString();
-            fetch('/monitor/server-info/?' + params)
+            fetch('{APP_PREFIX}/monitor/server-info/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('server-info-result').innerHTML = data;
@@ -2272,7 +2287,7 @@ async def monitor():
         }}
 
         function fetchSlotInfo() {{
-            fetch('/monitor/slot-info/')
+            fetch('{APP_PREFIX}/monitor/slot-info/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('slot-info-result').innerHTML = data;
@@ -2283,7 +2298,7 @@ async def monitor():
         }}
 
         function fetchClusterStateInfo() {{
-            fetch('/monitor/cluster-state-info/')
+            fetch('{APP_PREFIX}/monitor/cluster-state-info/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('cluster-state-info-result').innerHTML = data;
@@ -2294,7 +2309,7 @@ async def monitor():
         }}
 
         function fetchMemoryUsage() {{
-            fetch('/monitor/memory-usage/')
+            fetch('{APP_PREFIX}/monitor/memory-usage/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('memory-usage-result').innerHTML = data;
@@ -2331,7 +2346,7 @@ async def monitor():
         }});
         
         function fetchMemoryUsage() {{
-            fetch('/monitor/memory-usage/')
+            fetch('{APP_PREFIX}/monitor/memory-usage/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('memory-usage-result').innerHTML = data;
@@ -2348,7 +2363,7 @@ async def monitor():
             const spinner = document.getElementById('ai-cluster-spinner');
             resultDiv.innerHTML = '';
             spinner.style.display = 'inline';
-            fetch('/ai/cluster-health')
+            fetch('{APP_PREFIX}/ai/cluster-health')
                 .then(response => response.text())
                 .then(data => {{
                     resultDiv.innerHTML = data;
@@ -2423,8 +2438,8 @@ async def manager():
     <body>
     <h1 class="manager-title">Redis Cluster Manager - {projectName}</h1>
     <div class="nav-buttons">
-        <a href="/monitor" class="monitor-nav">Go to Monitor</a>
-        <a href="/maintain" class="maintenance-nav">Go to Maintenance</a>
+        <a href="{APP_PREFIX}/monitor" class="monitor-nav">Go to Monitor</a>
+        <a href="{APP_PREFIX}/maintain" class="maintenance-nav">Go to Maintenance</a>
         {_theme_toggle_html}
     </div>
     <hr>
@@ -2601,7 +2616,7 @@ async def manager():
             submitBtn.disabled = true;
             spinner.style.display = 'inline';
             
-            fetch('/manager/get-nodes-by-action/?action=' + encodeURIComponent(action))
+            fetch('{APP_PREFIX}/manager/get-nodes-by-action/?action=' + encodeURIComponent(action))
                 .then(response => response.json())
                 .then(data => {{
                     if (resultDiv) {{
@@ -2675,7 +2690,7 @@ async def manager():
             // Log the values to help debug
             console.log("Confirming action for node:", redisNode, "action:", action);
             
-            fetch('/manager/node-action/?redisNode=' + encodeURIComponent(redisNode) + '&action=' + encodeURIComponent(action) + '&confirmed=true')
+            fetch('{APP_PREFIX}/manager/node-action/?redisNode=' + encodeURIComponent(redisNode) + '&action=' + encodeURIComponent(action) + '&confirmed=true')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('node-action-result').innerHTML = data;
@@ -2712,7 +2727,7 @@ async def manager():
             const formData = new FormData(document.getElementById('node-action-form'));
             const params = new URLSearchParams(formData).toString();
             
-            fetch('/manager/node-action/?' + params)
+            fetch('{APP_PREFIX}/manager/node-action/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('node-action-result').innerHTML = data;
@@ -2748,7 +2763,7 @@ async def manager():
             document.getElementById('switch-confirm-btn').addEventListener('click', function() {{
                 resultDiv.innerHTML = '<p>Processing request...</p>';
                 const params = new URLSearchParams(formData).toString();
-                fetch('/manager/switch-master-slave/?' + params)
+                fetch('{APP_PREFIX}/manager/switch-master-slave/?' + params)
                     .then(response => response.text())
                     .then(data => {{ resultDiv.innerHTML = data; }})
                     .catch(error => {{ resultDiv.innerHTML = "<p style='color: red;'>Error switching master/slave: " + error + "</p>"; }});
@@ -2763,7 +2778,7 @@ async def manager():
             event.preventDefault();
             const formData = new FormData(document.getElementById('change-config-form'));
             const params = new URLSearchParams(formData).toString();
-            fetch('/manager/change-config/?' + params)
+            fetch('{APP_PREFIX}/manager/change-config/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('change-config-result').innerHTML = data;
@@ -2777,7 +2792,7 @@ async def manager():
             event.preventDefault();
             const formData = new FormData(document.getElementById('save-config-form'));
             const params = new URLSearchParams(formData).toString();
-            fetch('/manager/save-config/?' + params)
+            fetch('{APP_PREFIX}/manager/save-config/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('save-config-result').innerHTML = data;
@@ -2829,7 +2844,7 @@ async def manager():
                     "<p>Starting rolling restart. This may take several minutes...</p>" ;
             
                 // Make the request to the correct endpoint
-                fetch('/manager/rolling-restart/?' + params)
+                fetch('{APP_PREFIX}/manager/rolling-restart/?' + params)
                     .then(response => response.text())
                     .then(data => {{
                         document.getElementById('rolling-restart-result').innerHTML = data;
@@ -2846,7 +2861,7 @@ async def manager():
             const clusterModeChecked = document.getElementById('cluster_mode').checked;
             formData.set('cluster_mode', clusterModeChecked ? 'true' : 'false');
             const params = new URLSearchParams(formData).toString();
-            fetch('/manager/execute-command/?' + params)
+            fetch('{APP_PREFIX}/manager/execute-command/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('execute-command-result').innerHTML = data;
@@ -2873,7 +2888,7 @@ async def manager():
             event.preventDefault();
             const formData = new FormData(document.getElementById('show-log-form'));
             const params = new URLSearchParams(formData).toString();
-            fetch('/manager/show-log/?' + params)
+            fetch('{APP_PREFIX}/manager/show-log/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('show-log-result').innerHTML = data;
@@ -2891,7 +2906,7 @@ async def manager():
             const spinner = document.getElementById('ai-log-spinner');
             resultDiv.innerHTML = '';
             spinner.style.display = 'inline';
-            fetch('/ai/log-analysis?' + params)
+            fetch('{APP_PREFIX}/ai/log-analysis?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     resultDiv.innerHTML = data;
@@ -3180,8 +3195,8 @@ async def maintain():
     <body>
     <h1 class="maintenance-title">Redis Cluster Maintenance - {projectName}</h1>
     <div class="nav-buttons">
-        <a href="/monitor" class="monitor-nav">Go to Monitor</a>
-        <a href="/manager" class="manager-nav">Go to Manager</a>
+        <a href="{APP_PREFIX}/monitor" class="monitor-nav">Go to Monitor</a>
+        <a href="{APP_PREFIX}/manager" class="manager-nav">Go to Manager</a>
         {_theme_toggle_html}
     </div>
     <hr>
@@ -3514,7 +3529,7 @@ async def maintain():
        downloadResultDiv.innerHTML = '<p>Attempting to download...</p>';
    
        // Construct the URL with the query parameter
-       const url = `/maintain/download-redis/?redis_filename=${{encodeURIComponent(redisFilename)}}`;
+    const url = `{APP_PREFIX}/maintain/download-redis/?redis_filename=${{encodeURIComponent(redisFilename)}}`;
    
        fetch(url)
            .then(response => {{
@@ -3572,7 +3587,7 @@ async def maintain():
                 masterDropdownField.style.display = 'flex';
                 masterNodeWarning.style.display = 'none';
                 // Fetch master nodes for dropdown
-                fetch('/maintain/view-master-nodes-dropdown')
+                fetch('{APP_PREFIX}/maintain/view-master-nodes-dropdown')
                     .then(response => response.text())
                     .then(data => {{
                         document.getElementById('masterID').innerHTML = data;
@@ -3590,7 +3605,7 @@ async def maintain():
             event.preventDefault();
             const formData = new FormData(document.getElementById('add-node-form'));
             const params = new URLSearchParams(formData).toString();
-            fetch('/maintain/add-node/?' + params)
+            fetch('{APP_PREFIX}/maintain/add-node/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('add-node-result').innerHTML = data;
@@ -3608,7 +3623,7 @@ async def maintain():
             // Show loading indicator
             document.getElementById('delete-node-result').innerHTML = "<p>Loading...</p>";
             
-            fetch('/maintain/delete-node/?' + params)
+            fetch('{APP_PREFIX}/maintain/delete-node/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('delete-node-result').innerHTML = data;
@@ -3622,7 +3637,7 @@ async def maintain():
             // Show loading indicator
             document.getElementById('delete-node-result').innerHTML = "<p>Deleting node...</p>";
             
-            fetch('/maintain/delete-node/?nodeId=' + nodeId + '&confirmed=true')
+            fetch('{APP_PREFIX}/maintain/delete-node/?nodeId=' + nodeId + '&confirmed=true')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('delete-node-result').innerHTML = data;
@@ -3641,7 +3656,7 @@ async def maintain():
             const loadingSpan = document.getElementById('reassign-loading');
             loadingSpan.style.display = 'inline';
             
-            fetch('/maintain/get-slaves-and-masters/')
+            fetch('{APP_PREFIX}/maintain/get-slaves-and-masters/')
                 .then(response => response.json())
                 .then(data => {{
                     loadingSpan.style.display = 'none';
@@ -3742,7 +3757,7 @@ async def maintain():
             
             document.getElementById('reassign-slave-result').innerHTML = '';
             
-            fetch(`/maintain/reassign-slave/?slaveNodeId=${{encodeURIComponent(slaveNodeId)}}&newMasterId=${{encodeURIComponent(newMasterId)}}`)
+            fetch(`{APP_PREFIX}/maintain/reassign-slave/?slaveNodeId=${{encodeURIComponent(slaveNodeId)}}&newMasterId=${{encodeURIComponent(newMasterId)}}`)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('reassign-slave-result').innerHTML = data;
@@ -3761,7 +3776,7 @@ async def maintain():
         }}
         
         function fetchNotImplemented(feature) {{
-            fetch('/maintain/' + feature + '/')
+            fetch('{APP_PREFIX}/maintain/' + feature + '/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById(feature + '-result').innerHTML = data;
@@ -3773,7 +3788,7 @@ async def maintain():
         
         function fetchCurrentSlotInfo() {{
             document.getElementById('current-slot-info').innerHTML = "<p>Loading slot information...</p>";
-            fetch('/maintain/slot-info/')
+            fetch('{APP_PREFIX}/maintain/slot-info/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('current-slot-info').innerHTML = data;
@@ -3910,7 +3925,7 @@ async def maintain():
             // Show loading indicator
             document.getElementById('move-slots-result').innerHTML = "<p>Processing slot migration. This may take some time...</p>";
             
-            fetch('/maintain/move-slots/?' + params)
+            fetch('{APP_PREFIX}/maintain/move-slots/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('move-slots-result').innerHTML = data;
@@ -3944,7 +3959,7 @@ async def maintain():
             formData.append('upload_file', file);
             
             // Send the file to the server
-            fetch('/maintain/upload-redis/', {{
+            fetch('{APP_PREFIX}/maintain/upload-redis/', {{
                 method: 'POST',
                 body: formData
             }})
@@ -4056,7 +4071,7 @@ async def maintain():
             progressIntervals.push(continuousUpdateInterval);
             
             // Begin the actual extraction and compilation
-            fetch('/maintain/extract-compile-redis/?redis_tarfile=' + encodeURIComponent(redisFilename))
+            fetch('{APP_PREFIX}/maintain/extract-compile-redis/?redis_tarfile=' + encodeURIComponent(redisFilename))
                 .then(response => response.text())
                 .then(html => {{
                     // Clean up all progress intervals
@@ -4120,7 +4135,7 @@ async def maintain():
                 : '<p>Copying the compiled Redis binary to all nodes in the cluster. Please wait...</p>';
             
             // Call the API endpoint
-            fetch(`/maintain/copy-redis-binaries/?redis_version=${{encodeURIComponent(version)}}&compile_each_server=${{compileEachServer}}`)
+            fetch(`{APP_PREFIX}/maintain/copy-redis-binaries/?redis_version=${{encodeURIComponent(version)}}&compile_each_server=${{compileEachServer}}`)
                 .then(response => response.text())
                 .then(html => {{
                     document.getElementById('copy-binaries-result').innerHTML = html;
@@ -4154,7 +4169,7 @@ async def maintain():
             
             // Call API with confirmation=false first to get the confirmation dialog
             const versionParam = version ? `&redis_version=${{encodeURIComponent(version)}}` : '';
-            fetch(`/maintain/restart-slaves/?wait_seconds=${{waitSeconds}}${{versionParam}}`)
+            fetch(`{APP_PREFIX}/maintain/restart-slaves/?wait_seconds=${{waitSeconds}}${{versionParam}}`)
                 .then(response => response.text())
                 .then(html => {{
                     document.getElementById('restart-slaves-result').innerHTML = html;
@@ -4169,7 +4184,7 @@ async def maintain():
             document.getElementById('restart-slaves-result').innerHTML = '<p>Restarting slave nodes. This may take several minutes...</p>';
             
             const versionParam = redisVersion ? `&redis_version=${{encodeURIComponent(redisVersion)}}` : '';
-            fetch(`/maintain/restart-slaves/?wait_seconds=${{waitSeconds}}${{versionParam}}&confirmed=true`)
+            fetch(`{APP_PREFIX}/maintain/restart-slaves/?wait_seconds=${{waitSeconds}}${{versionParam}}&confirmed=true`)
                 .then(response => response.text())
                 .then(html => {{
                     document.getElementById('restart-slaves-result').innerHTML = html;
@@ -4197,7 +4212,7 @@ async def maintain():
     
     // Check if binary exists before proceeding
     const version = versionField.value.trim();
-    fetch(`/maintain/verify-redis-binary/?redis_version=${{encodeURIComponent(version)}}`)
+    fetch(`{APP_PREFIX}/maintain/verify-redis-binary/?redis_version=${{encodeURIComponent(version)}}`)
         .then(response => response.json())
         .then(data => {{
             if (data.exists) {{
@@ -4433,7 +4448,7 @@ function executeNodeRestart(nodeAddress, isMaster) {{
     setVersionControlRestartButtonsDisabled(true);
     
     // Call the restart endpoint
-    fetch(`/manager/node-action/?redisNode=${{encodeURIComponent(nodeAddress)}}&action=restart&confirmed=true`)
+    fetch(`{APP_PREFIX}/manager/node-action/?redisNode=${{encodeURIComponent(nodeAddress)}}&action=restart&confirmed=true`)
         .then(response => response.text())
         .then(html => {{
             // Update status message to show success
@@ -4465,7 +4480,7 @@ function executeNodeRestart(nodeAddress, isMaster) {{
     
     // Fetch current Redis version when page loads
 document.addEventListener('DOMContentLoaded', function() {{
-    fetch('/maintain/get-redis-version/')
+    fetch('{APP_PREFIX}/maintain/get-redis-version/')
         .then(response => response.text())
         .then(data => {{
             document.getElementById('current-redis-version').textContent = data;
@@ -4493,7 +4508,7 @@ function updateRedisConfig() {{
     const redisVersion = newVersionField.value.trim();
     resultElement.innerHTML = '<p>Updating configuration...</p>';
     
-    fetch(`/maintain/update-redis-config/?redis_version=${{encodeURIComponent(redisVersion)}}`)
+    fetch(`{APP_PREFIX}/maintain/update-redis-config/?redis_version=${{encodeURIComponent(redisVersion)}}`)
         .then(response => response.text())
         .then(data => {{
             resultElement.innerHTML = data;
@@ -4518,7 +4533,7 @@ function loadRedisVersionControl(preserveScroll = false) {{
 
     versionControlContainer.innerHTML = '<div class=\"loading\">Loading version data...</div>';
 
-    fetch('/maintain/redis-version-control/')
+    fetch('{APP_PREFIX}/maintain/redis-version-control/')
         .then(response => response.text())
         .then(html => {{
             versionControlContainer.innerHTML = html;
@@ -5412,9 +5427,9 @@ async def maker():
     <body>
     <h1 class="maintenance-title">Redis Cluster Maker - {projectName}</h1>
     <div class="nav-buttons">
-        <a href="/monitor" class="monitor-nav">Go to Monitor</a>
-        <a href="/manager" class="manager-nav">Go to Manager</a>
-        <a href="/maintain" class="maintenance-nav">Go to Maintenance</a>
+        <a href="{APP_PREFIX}/monitor" class="monitor-nav">Go to Monitor</a>
+        <a href="{APP_PREFIX}/manager" class="manager-nav">Go to Manager</a>
+        <a href="{APP_PREFIX}/maintain" class="maintenance-nav">Go to Maintenance</a>
         {_theme_toggle_html}
     </div>
     <hr>
@@ -5580,7 +5595,7 @@ async def maker():
 
         function checkClusterStatus() {{
             document.getElementById('cluster-status-result').innerHTML = "<p>Checking cluster status...</p>";
-            fetch('/maker/check-status/')
+            fetch('{APP_PREFIX}/maker/check-status/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('cluster-status-result').innerHTML = data;
@@ -5593,7 +5608,7 @@ async def maker():
 
         function validateNodes() {{
             document.getElementById('validate-nodes-result').innerHTML = "<p>Validating nodes...</p>";
-            fetch('/maker/validate-nodes/')
+            fetch('{APP_PREFIX}/maker/validate-nodes/')
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('validate-nodes-result').innerHTML = data;
@@ -5607,7 +5622,7 @@ async def maker():
         function previewCluster() {{
             const replication = document.getElementById('preview_replication').value;
             document.getElementById('preview-cluster-result').innerHTML = "<p>Generating preview...</p>";
-            fetch('/maker/preview/?replication_number=' + replication)
+            fetch('{APP_PREFIX}/maker/preview/?replication_number=' + replication)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('preview-cluster-result').innerHTML = data;
@@ -5667,7 +5682,7 @@ async def maker():
                 skip_start: skipStart
             }});
             
-            fetch('/maker/create-cluster/?' + params)
+            fetch('{APP_PREFIX}/maker/create-cluster/?' + params)
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('create-cluster-result').innerHTML = data;
@@ -5712,7 +5727,7 @@ async def maker():
             const filename = document.getElementById('maker_redis_filename').value.trim();
             document.getElementById('maker-download-result').innerHTML = '<p>Downloading ' + filename + '...</p>';
             
-            fetch('/maintain/download-redis/?redis_filename=' + encodeURIComponent(filename))
+            fetch('{APP_PREFIX}/maintain/download-redis/?redis_filename=' + encodeURIComponent(filename))
                 .then(response => response.text())
                 .then(html => {{
                     document.getElementById('maker-download-result').innerHTML = html;
@@ -5750,7 +5765,7 @@ async def maker():
             const formData = new FormData();
             formData.append('upload_file', file);
             
-            fetch('/maintain/upload-redis/', {{
+            fetch('{APP_PREFIX}/maintain/upload-redis/', {{
                 method: 'POST',
                 body: formData
             }})
@@ -5802,7 +5817,7 @@ async def maker():
                 }}
             }}, 2000);
             
-            fetch('/maintain/extract-compile-redis/?redis_tarfile=' + encodeURIComponent(makerSelectedTarfile))
+            fetch('{APP_PREFIX}/maintain/extract-compile-redis/?redis_tarfile=' + encodeURIComponent(makerSelectedTarfile))
                 .then(response => response.text())
                 .then(html => {{
                     clearInterval(progressInterval);
@@ -5838,7 +5853,7 @@ async def maker():
             document.getElementById('maker-deploy-result').innerHTML = 
                 '<p>Deploying Redis ' + version + ' to remote servers (compiling on each server)...</p>';
             
-            fetch('/maintain/copy-redis-binaries/?redis_version=' + encodeURIComponent(version))
+            fetch('{APP_PREFIX}/maintain/copy-redis-binaries/?redis_version=' + encodeURIComponent(version))
                 .then(response => response.text())
                 .then(html => {{
                     document.getElementById('maker-deploy-result').innerHTML = html;
@@ -6064,11 +6079,11 @@ def _login_html(locked: bool = False) -> str:
             '<script>'
             'async function doLogin(e){'
             'e.preventDefault();'
-            'var r=await fetch("/login",{method:"POST",'
+            f'var r=await fetch("{APP_PREFIX}/login",{{method:"POST",'
             'headers:{"Content-Type":"application/json"},'
             'body:JSON.stringify({password:document.getElementById("pwd").value})});'
             'var d=await r.json();'
-            'if(d.ok){window.location.href="/";return;}'
+            f'if(d.ok){{window.location.href="{APP_PREFIX}/";return;}}'
             'var b=document.getElementById("err");'
             'if(d.reason==="LOCKED"||d.attempts_left===0){'
             'b.innerHTML="&#128274; Application locked. Restart the server to unlock.";'
@@ -6115,7 +6130,7 @@ def _login_html(locked: bool = False) -> str:
 async def login_page(request: Request):
     token = request.cookies.get("pare_session")
     if pareAuth.check_session(token):
-        return RedirectResponse(url="/", status_code=302)
+        return RedirectResponse(url=f"{APP_PREFIX}/", status_code=302)
     return HTMLResponse(content=_login_html(locked=pareAuth.is_locked()))
 
 
@@ -6139,7 +6154,7 @@ async def logout(request: Request):
     token = request.cookies.get("pare_session")
     if token:
         pareAuth.do_logout(token)
-    resp = RedirectResponse(url="/login", status_code=302)
+    resp = RedirectResponse(url=f"{APP_PREFIX}/login", status_code=302)
     resp.delete_cookie("pare_session")
     return resp
 
