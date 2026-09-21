@@ -2636,6 +2636,12 @@ async def manager():
                     console.error('Error fetching nodes:', error);
                 }});
         }}
+
+        function refreshNodeListAfterSuccessfulAction(data) {{
+            if (data.includes('completed for node')) {{
+                setTimeout(updateNodeListByAction, 3000);
+            }}
+        }}
         
         // Initialize node list on page load
         document.addEventListener('DOMContentLoaded', function() {{
@@ -2673,8 +2679,7 @@ async def manager():
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('node-action-result').innerHTML = data;
-                    // Refresh the node list after action completes
-                    setTimeout(updateNodeListByAction, 1000);
+                    refreshNodeListAfterSuccessfulAction(data);
                 }})
                 .catch(error => {{
                     document.getElementById('node-action-result').innerHTML = "<p style='color: red;'>Error: " + error + "</p>";
@@ -2711,8 +2716,9 @@ async def manager():
                 .then(response => response.text())
                 .then(data => {{
                     document.getElementById('node-action-result').innerHTML = data;
-                    // Refresh the node list after action completes
-                    setTimeout(updateNodeListByAction, 1000);
+                    // Confirmation responses stay visible; completed actions refresh
+                    // after the success message has been shown for three seconds.
+                    refreshNodeListAfterSuccessfulAction(data);
                 }})
                 .catch(error => {{
                     document.getElementById('node-action-result').innerHTML = "<p style='color: red;'>Error performing action: " + error + "</p>";
