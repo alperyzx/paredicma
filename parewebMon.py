@@ -6,6 +6,9 @@
 
 import os
 import sys  # Ensure sys is imported for module reloading
+import asyncio
+import json
+from queue import Queue
 from typing import Optional
 
 from pareConfig import *  # type: ignore[reportGeneralTypeIssues]  # noqa: F401, F403, F811
@@ -14,7 +17,7 @@ from pareFunc import *  # type: ignore[reportGeneralTypeIssues]  # noqa: F401, F
 from pareFuncWeb import *  # type: ignore[reportGeneralTypeIssues]  # noqa: F401, F403, F811
 
 from fastapi import FastAPI, APIRouter, Request, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response, StreamingResponse
 from subprocess import getstatusoutput
 import subprocess
 from time import sleep  # Import sleep
@@ -4181,16 +4184,34 @@ async def maintain():
         }}
 
         function confirmRestartSlaves(waitSeconds, redisVersion) {{
-            document.getElementById('restart-slaves-result').innerHTML = '<p>Restarting slave nodes. This may take several minutes...</p>';
+            const resultElement = document.getElementById('restart-slaves-result');
+            resultElement.innerHTML = '<p>Restarting slave nodes. Progress will appear after each successful restart...</p><div id="restart-progress"></div>';
             
             const versionParam = redisVersion ? `&redis_version=${{encodeURIComponent(redisVersion)}}` : '';
             fetch(`{APP_PREFIX}/maintain/restart-slaves/?wait_seconds=${{waitSeconds}}${{versionParam}}&confirmed=true`)
-                .then(response => response.text())
-                .then(html => {{
-                    document.getElementById('restart-slaves-result').innerHTML = html;
+                .then(async response => {{
+                    if (!response.ok) throw new Error(`HTTP ${{response.status}}`);
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {{
+                        const {{value, done}} = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, {{stream: true}});
+                        const lines = buffer.split('\\n');
+                        buffer = lines.pop();
+                        lines.filter(Boolean).forEach(line => {{
+                            const event = JSON.parse(line);
+                            if (event.type === 'progress') {{
+                                document.getElementById('restart-progress').insertAdjacentHTML('beforeend', event.html);
+                            }} else if (event.type === 'complete') {{
+                                resultElement.innerHTML = event.html;
+                            }}
+                        }});
+                    }}
                 }})
                 .catch(error => {{
-                    document.getElementById('restart-slaves-result').innerHTML = 
+                    resultElement.innerHTML =
                         `<div class="error-message"><p>Error restarting slave nodes:</p><pre>${{error.message}}</pre></div>`;
                 }});
         }}
@@ -5165,9 +5186,32 @@ async def maintain_restart_slaves(wait_seconds: int = 30, redis_version: Optiona
             </div>
             """)
 
-        # If confirmed, call the function to restart slave nodes
-        result = restartAllSlaves_wv(wait_seconds, redis_version)
-        return HTMLResponse(content=result)
+        progress_queue = Queue()
+
+        def report_progress(message):
+            progress_queue.put({"type": "progress", "html": message + "<br>"})
+
+        async def stream_restart_progress():
+            worker = asyncio.create_task(
+                asyncio.to_thread(
+                    restartAllSlaves_wv,
+                    wait_seconds,
+                    redis_version,
+                    report_progress,
+                )
+            )
+
+            while not worker.done() or not progress_queue.empty():
+                try:
+                    event = await asyncio.to_thread(progress_queue.get, True, 0.2)
+                    yield json.dumps(event) + "\n"
+                except Exception:
+                    await asyncio.sleep(0.05)
+
+            result = await worker
+            yield json.dumps({"type": "complete", "html": result}) + "\n"
+
+        return StreamingResponse(stream_restart_progress(), media_type="application/x-ndjson")
 
     except Exception as e:
         import traceback

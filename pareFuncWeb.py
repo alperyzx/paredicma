@@ -2640,7 +2640,7 @@ def redisNewBinaryCopier_wv(redis_version, compile_each_server=True):
         """
 
 #restart all slave nodes with new redis version
-def restartAllSlaves_wv(wait_seconds=60, redis_version=None):
+def restartAllSlaves_wv(wait_seconds=60, redis_version=None, progress_callback=None):
     """
     Restarts all slave nodes in the cluster with a delay between each restart.
     If redis_version is provided, updates the nodes to use that version.
@@ -2763,7 +2763,10 @@ def restartAllSlaves_wv(wait_seconds=60, redis_version=None):
                 sleep(5)  # Give node time to start
                 if pingredisNode(node['ip'], node['port']):
                     success_count += 1
-                    results.append(f"<span style='color: green;'>✓ Successfully restarted {node_display}</span>")
+                    success_message = f"<span style='color: green;'>✓ Successfully restarted {node_display}</span>"
+                    results.append(success_message)
+                    if progress_callback:
+                        progress_callback(success_message)
                     
                     # Check Redis version if update was requested
                     if redis_version:
