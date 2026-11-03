@@ -1,7 +1,10 @@
 # !/usr/bin/python
 # pareAI.py - AI assistance module for Paredicma (Ollama / OpenAI / Azure)
 
+import re
 import subprocess
+from datetime import datetime
+
 import requests
 from pareConfig import *
 from pareNodeList import *
@@ -9,19 +12,34 @@ from pareNodeList import *
 
 # ─── Provider implementations ────────────────────────────────────────────────
 
-def ollama_chat(prompt: str, model: str = None, timeout: int = 120) -> str:
+def strip_thinking(text: str) -> str:
+    """Keep only the answer when a model returns its reasoning inline, closed by </think>."""
+    if "</think>" in text:
+        return text.split("</think>")[-1].strip()
+    if text.lstrip().startswith("<think>"):
+        return "ERROR: Model is still reasoning and did not finish. Try again or disable thinking."
+    return text
+
+
+def ollama_chat(prompt: str, model: str = None, timeout: int = 120, thinking: bool = False, num_ctx: int = None) -> str:
     model = model or aiModel
     url = f"{ollamaUrl}/api/generate"
+    # Thinking tokens count against num_predict, so the budget is larger when thinking is on
+    options = {"temperature": 0.2, "num_predict": 4096 if thinking else 1024}
+    if num_ctx:
+        # Ollama defaults to a small context window; large merged prompts need it raised
+        options["num_ctx"] = num_ctx
     payload = {
         "model": model,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": 0.2, "num_predict": 1024}
+        "think": thinking,
+        "options": options
     }
     try:
         resp = requests.post(url, json=payload, timeout=timeout)
         resp.raise_for_status()
-        return resp.json().get("response", "").strip()
+        return strip_thinking(resp.json().get("response", "").strip())
     except requests.exceptions.ConnectionError:
         return "ERROR: Cannot reach Ollama at " + ollamaUrl + ". Is Ollama running?"
     except requests.exceptions.Timeout:
@@ -87,15 +105,29 @@ def azure_chat(prompt: str, timeout: int = 120) -> str:
         return f"ERROR: {str(e)}"
 
 
-def ai_chat(prompt: str, timeout: int = 120) -> str:
-    """Unified AI call — routes to Ollama, OpenAI, or Azure based on aiProvider in pareConfig."""
+def ai_chat(prompt: str, timeout: int = 120, thinking: bool = False, num_ctx: int = None) -> str:
+    """Unified AI call — routes to Ollama, OpenAI, or Azure based on aiProvider in pareConfig.
+    thinking applies to Ollama only; OpenAI and Azure models do not take this option here."""
     provider = aiProvider.lower() if aiProvider else "ollama"
     if provider == "openai":
         return openai_chat(prompt, timeout)
     elif provider == "azure":
         return azure_chat(prompt, timeout)
     else:
-        return ollama_chat(prompt, timeout=timeout)
+        return ollama_chat(prompt, timeout=timeout, thinking=thinking, num_ctx=num_ctx)
+
+
+def ai_timeout(thinking: bool) -> int:
+    """
+    Merged log prompts are about 25k tokens, and prompt processing alone can take minutes on a
+    local model. Thinking adds generation time on top, so it gets a longer limit.
+    """
+    return 900 if thinking else 300
+
+
+def ai_model_label(thinking: bool) -> str:
+    label = aiProvider + ":" + (openaiModel if aiProvider == "openai" else azureDeployment if aiProvider == "azure" else aiModel)
+    return label + (" (thinking)" if thinking and aiProvider.lower() not in ("openai", "azure") else "")
 
 
 def _is_local(ip: str) -> bool:
@@ -242,15 +274,14 @@ def build_cluster_health_prompt(topology: dict) -> str:
     return "\n".join(lines)
 
 
-def analyze_cluster_health() -> dict:
+def analyze_cluster_health(thinking: bool = False) -> dict:
     """Gather cluster topology and use AI to analyze it."""
     topology = gather_cluster_topology()
     if "error" in topology:
         return {"error": topology["error"], "analysis": None}
     prompt = build_cluster_health_prompt(topology)
-    analysis = ai_chat(prompt)
-    provider_label = aiProvider + ":" + (openaiModel if aiProvider == "openai" else azureDeployment if aiProvider == "azure" else aiModel)
-    return {"topology": topology, "analysis": analysis, "model": provider_label}
+    analysis = ai_chat(prompt, timeout=ai_timeout(thinking), thinking=thinking)
+    return {"topology": topology, "analysis": analysis, "model": ai_model_label(thinking)}
 
 # ─── Feature 2: Post-Failover Log Analysis ──────────────────────────────────
 
@@ -290,37 +321,150 @@ def get_raw_log_content(redisNode: str, line_count: int = 200) -> str:
         return f"ERROR: {str(e)}"
 
 
-def build_log_analysis_prompt(log_text: str, redisNode: str) -> str:
-    line_count = log_text.count("\n") + 1
+# Log analysis limits. When every active node is selected, each node contributes at most
+# MAX_ALL_NODES_LINES lines. The prompt must fit COMBINED_NUM_CTX tokens together with the output.
+MAX_ALL_NODES_LINES = 100
+COMBINED_NUM_CTX = 32768
+PROMPT_OVERHEAD_TOKENS = 1000   # instructions and template text around the logs
+REPLY_TOKENS = 1024             # num_predict without thinking
+REPLY_TOKENS_THINKING = 4096    # num_predict with thinking (reasoning tokens count too)
+# Measured on granite4.2:8b: Redis log text is about 2.25 characters per token. 2.0 keeps a margin.
+CHARS_PER_TOKEN = 2.0
+
+# Redis log line start: "<pid>:<role> DD Mon YYYY HH:MM:SS.mmm ..."
+_LOG_TIMESTAMP = re.compile(r'^\d+:[A-Za-z] (\d{2} \w{3} \d{4} \d{2}:\d{2}:\d{2}\.\d{3})')
+
+
+def log_char_budget(thinking: bool) -> int:
+    """Characters available for log lines, derived from the context window and the reply size."""
+    reply = REPLY_TOKENS_THINKING if thinking else REPLY_TOKENS
+    tokens = COMBINED_NUM_CTX - reply - PROMPT_OVERHEAD_TOKENS
+    return int(tokens * CHARS_PER_TOKEN)
+
+
+def _fair_quotas(sizes: dict, budget: int) -> dict:
+    """Splits budget across nodes. Nodes with little text keep all of it; the rest is shared equally."""
+    quotas = {}
+    remaining = budget
+    ordered = sorted(sizes, key=lambda node: sizes[node])
+    for index, node in enumerate(ordered):
+        fair_share = remaining // (len(ordered) - index)
+        quotas[node] = min(sizes[node], fair_share)
+        remaining -= quotas[node]
+    return quotas
+
+
+def merge_node_logs(node_logs: dict, char_budget: int) -> tuple:
+    """
+    Merges the logs of several nodes into one timeline, sorted by timestamp, tagged with the node.
+    Each node keeps its newest lines within a fair share of char_budget, so no node disappears
+    because another node is chatty. Lines without a timestamp stay with the line before them.
+    Returns (timeline_text, included_line_count, omitted_line_count).
+    """
+    per_node = {}  # node -> list of (timestamp, sequence, tagged_line)
+    sequence = 0
+    for node, text in node_logs.items():
+        last_stamp = datetime.min
+        entries = []
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            match = _LOG_TIMESTAMP.match(line)
+            if match:
+                last_stamp = datetime.strptime(match.group(1), '%d %b %Y %H:%M:%S.%f')
+            entries.append((last_stamp, sequence, f"[{node}] {line}"))
+            sequence += 1
+        per_node[node] = entries
+
+    sizes = {node: sum(len(tagged) + 1 for _, _, tagged in entries) for node, entries in per_node.items()}
+    quotas = _fair_quotas(sizes, char_budget)
+
+    kept = []
+    total_lines = 0
+    for node, entries in per_node.items():
+        total_lines += len(entries)
+        used = 0
+        node_kept = []
+        for entry in reversed(entries):  # newest first
+            cost = len(entry[2]) + 1
+            if used + cost > quotas[node]:
+                break
+            node_kept.append(entry)
+            used += cost
+        kept.extend(node_kept)
+
+    kept.sort(key=lambda e: (e[0], e[1]))
+    lines = [tagged for _, _, tagged in kept]
+    omitted = total_lines - len(lines)
+    return "\n".join(lines), len(lines), omitted
+
+
+def build_combined_log_prompt(timeline: str, nodes: list, omitted: int) -> str:
+    omitted_note = (
+        f"Note: {omitted} earlier lines were omitted because of the size limit.\n"
+        if omitted else ""
+    )
     return (
-        "You are a Redis operations expert analyzing logs after a potential failover.\n"
-        f"Node being analyzed: {redisNode}\n\n"
-        "Please analyze the following Redis log excerpt and answer:\n"
-        "1. Did a failover or role change occur? Describe what happened and when.\n"
-        "2. Was the failover successful? Any errors or warnings?\n"
-        "3. What is the current role of this node (master/replica)?\n"
-        "4. Are there connection failures, cluster errors, or data integrity concerns?\n"
+        "You are a Redis operations expert analyzing logs from several nodes of the same cluster after a potential failover.\n"
+        f"Nodes analyzed: {', '.join(nodes)}\n"
+        "The lines below come from all these nodes, merged by timestamp. Each line starts with its node in brackets.\n"
+        "The nodes' logs complete each other: a failover on one node is usually confirmed by lines on the others.\n\n"
+        "Analyze the merged timeline and answer:\n"
+        "1. Timeline: which failover or role change events happened, in order, and on which node.\n"
+        "2. Was the failover successful? Confirm it from the other nodes' lines where possible.\n"
+        "3. Current role of each node (master/replica), as far as the logs show.\n"
+        "4. Replication and connection problems, cluster errors, or data integrity concerns, naming the node for each.\n"
         "5. Overall status: OK / WARNING / CRITICAL\n"
         "6. Recommended follow-up actions (if any).\n\n"
-        "Be concise and focus on operations-relevant findings.\n\n"
-        f"--- Redis Log ({line_count} lines from tail) ---\n"
-        + log_text[:6000] +
-        "\n--- End of Log ---\n\n"
+        "Be concise. Name the node for every finding.\n"
+        f"{omitted_note}"
+        f"--- Merged Redis logs ({len(timeline.splitlines())} lines) ---\n"
+        + timeline +
+        "\n--- End of Logs ---\n\n"
         "Analysis:"
     )
 
 
-def analyze_logs(redisNode: str, line_count: int = 200) -> dict:
-    """Read a node log file and use AI to analyze it for post-failover health."""
-    log_text = get_raw_log_content(redisNode, line_count)
-    if log_text.startswith("ERROR:"):
-        return {"error": log_text, "analysis": None}
-    prompt = build_log_analysis_prompt(log_text, redisNode)
-    analysis = ai_chat(prompt)
-    provider_label = aiProvider + ":" + (openaiModel if aiProvider == "openai" else azureDeployment if aiProvider == "azure" else aiModel)
+def _active_node_addresses() -> list:
+    return [f"{node[0][0]}:{node[1][0]}" for node in pareNodes if node[4]]
+
+
+def analyze_logs(nodes: list, line_count: int = 200, thinking: bool = False) -> dict:
+    """
+    Reads the logs of one or more nodes, merges them by time, and asks AI for one analysis.
+    When every active node is selected, line_count is capped at MAX_ALL_NODES_LINES.
+    """
+    nodes = [node.strip() for node in nodes if node.strip()]
+    if not nodes:
+        return {"error": "ERROR: No nodes selected.", "analysis": None}
+
+    all_selected = set(nodes) >= set(_active_node_addresses())
+    lines_clamped = all_selected and line_count > MAX_ALL_NODES_LINES
+    if lines_clamped:
+        line_count = MAX_ALL_NODES_LINES
+
+    node_logs = {}
+    node_errors = []
+    for node in nodes:
+        log_text = get_raw_log_content(node, line_count)
+        if log_text.startswith("ERROR:"):
+            node_errors.append(log_text)
+        else:
+            node_logs[node] = log_text
+
+    if not node_logs:
+        return {"error": " ".join(node_errors) or "ERROR: No logs could be read.", "analysis": None}
+
+    timeline, included, omitted = merge_node_logs(node_logs, log_char_budget(thinking))
+    prompt = build_combined_log_prompt(timeline, list(node_logs.keys()), omitted)
+    analysis = ai_chat(prompt, timeout=ai_timeout(thinking), thinking=thinking, num_ctx=COMBINED_NUM_CTX)
     return {
-        "node": redisNode,
+        "nodes": list(node_logs.keys()),
         "analysis": analysis,
-        "model": provider_label,
-        "log_lines": line_count
+        "model": ai_model_label(thinking),
+        "log_lines": included,
+        "omitted_lines": omitted,
+        "lines_per_node": line_count,
+        "lines_clamped": lines_clamped,
+        "node_errors": node_errors,
     }
