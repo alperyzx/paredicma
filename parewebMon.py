@@ -951,6 +951,83 @@ css_style = """
             width: 150px;
             margin-right: 10px;
         }
+        /* Checkbox toggles next to AI buttons: keep the label on one line, outside the 150px label column */
+        .ai-thinking-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            width: auto;
+            margin: 0;
+            white-space: nowrap;
+        }
+        /* Node dropdown for AI log analysis: trigger plus a panel of checkboxes (Grafana-style) */
+        /* Let the node dropdown open past this section's edge (.content clips overflow by default) */
+        .content.ai-log-content { overflow: visible; }
+        .ai-multiselect {
+            position: relative;
+            display: inline-block;
+            min-width: 260px;
+            vertical-align: middle;
+            /* Gap between the collapsed trigger and the line-count box below */
+            margin-bottom: 14px;
+        }
+        .ai-multiselect-trigger {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 10px;
+            border: 1px solid #cccccc;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #333333;
+            font-size: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+        .ai-multiselect-trigger:hover { border-color: #888888; }
+        .ai-multiselect-caret { font-size: 0.8em; color: #666666; }
+        .ai-multiselect-panel {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            min-width: 100%;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 50;
+            padding: 6px 0;
+            border: 1px solid #cccccc;
+            border-radius: 4px;
+            background: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .ai-multiselect-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: auto;
+            margin: 0;
+            padding: 6px 12px;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        .ai-multiselect-option:hover { background: #f0f0f0; }
+        .ai-multiselect-option input:disabled + span { color: #999999; }
+        .ai-multiselect-divider { height: 1px; margin: 6px 0; background: #e0e0e0; }
+        html[data-theme="dark"] .ai-multiselect-trigger { background: #2a2a2a; color: #e0e0e0; border-color: #555555; }
+        html[data-theme="dark"] .ai-multiselect-trigger:hover { border-color: #888888; }
+        html[data-theme="dark"] .ai-multiselect-caret { color: #aaaaaa; }
+        html[data-theme="dark"] .ai-multiselect-panel { background: #2a2a2a; color: #e0e0e0; border-color: #555555; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
+        html[data-theme="dark"] .ai-multiselect-option:hover { background: #3a3a3a; }
+        html[data-theme="dark"] .ai-multiselect-divider { background: #555555; }
+        html[data-theme="dark"] .ai-multiselect-option input:disabled + span { color: #777777; }
+        /* Status text under the AI button: takes its own row in the button container */
+        .ai-status {
+            display: block;
+            flex-basis: 100%;
+            margin: 0;
+        }
         input[type="text"], input[type="number"], select {
             width: 200px;
             padding: 8px; /* Increased padding */
@@ -2217,7 +2294,11 @@ async def monitor():
         </p>
         <div class="button-container">
             <button class="monitor-button" onclick="fetchAIClusterHealth()">&#129504; Run AI Cluster Analysis</button>
-            <span id="ai-cluster-spinner" style="display:none;margin-left:10px">&#9203; Analyzing with AI (may take ~30s)...</span>
+            <label class="ai-thinking-toggle">
+                <input type="checkbox" id="ai-cluster-thinking">
+                Enable thinking (slower)
+            </label>
+            <span id="ai-cluster-spinner" class="ai-status" style="display:none;">&#9203; Analyzing with AI (may take ~30s)...</span>
         </div>
         <div id="ai-cluster-health-result" style="margin-top: 10px;"></div>
     </div>
@@ -2364,9 +2445,13 @@ async def monitor():
         function fetchAIClusterHealth() {{
             const resultDiv = document.getElementById('ai-cluster-health-result');
             const spinner = document.getElementById('ai-cluster-spinner');
+            const thinking = document.getElementById('ai-cluster-thinking').checked;
             resultDiv.innerHTML = '';
-            spinner.style.display = 'inline';
-            fetch('{APP_PREFIX}/ai/cluster-health')
+            spinner.innerHTML = thinking
+                ? '&#9203; Analyzing with thinking enabled (may take several minutes)...'
+                : '&#9203; Analyzing with AI (may take ~30s)...';
+            spinner.style.display = 'block';
+            fetch('{APP_PREFIX}/ai/cluster-health?thinking=' + thinking)
                 .then(response => response.text())
                 .then(data => {{
                     resultDiv.innerHTML = data;
@@ -2469,7 +2554,7 @@ async def manager():
     <button class="collapsible">2 - Switch Master/Slave Nodes</button>
     <div class="content">
         <form id="switch-master-slave-form" onsubmit="switchMasterSlave(event)">
-            <label for="masterNode"><input class="manager-button" type="submit" value="Switch Master/Slave">
+            <label for="masterNode"><input id="switch-master-slave-button" class="manager-button" type="submit" value="Switch Master/Slave">
 </label>
             <select id="masterNode" name="redisNode">
                 {''.join([f"<option value='{node}'>{node}</option>" for node in masterNodes])}
@@ -2569,23 +2654,41 @@ async def manager():
     </div>
 
     <button class="collapsible">8 - AI Log Analysis (Post-Failover)</button>
-    <div class="content">
+    <div class="content ai-log-content">
         <p style="color:#666;font-size:0.9em;">
             After a failover, select a node and run AI analysis on its log file to verify
             everything is healthy: role change, connection recovery, and cluster status.
         </p>
         <form id="ai-log-form" onsubmit="fetchAILogAnalysis(event)">
-            <label for="aiLogNode">Select Node:</label>
-            <select id="aiLogNode" name="redisNode">
-                {''.join([f"<option value='{node}'>{node}</option>" for node in nodeList])}
-            </select>
-            <br><br>
+            <label>Select Nodes:</label>
+            <div class="ai-multiselect" id="ai-node-multiselect">
+                <button type="button" class="ai-multiselect-trigger" id="ai-node-trigger" onclick="toggleAINodeDropdown(event)">
+                    <span id="ai-node-summary">All nodes</span>
+                    <span class="ai-multiselect-caret">&#9662;</span>
+                </button>
+                <div class="ai-multiselect-panel" id="ai-node-panel" style="display:none;">
+                    <label class="ai-multiselect-option">
+                        <input type="checkbox" id="ai-log-all" checked onchange="aiLogAllToggled()">
+                        <span>All nodes</span>
+                    </label>
+                    <div class="ai-multiselect-divider"></div>
+                    {''.join([f"<label class='ai-multiselect-option'><input type='checkbox' name='ai_log_node' value='{node}' disabled onchange='aiLogNodeToggled()'><span>{node}</span></label>" for node in nodeList])}
+                </div>
+            </div>
+            <script>const aiLogAllNodes = [{''.join([f"'{node}'," for node in nodeList])}];</script>
+            <br>
             <label for="ai_line_count">Log lines to analyze:</label>
-            <input type="number" id="ai_line_count" name="line_count" min="50" max="1000" value="200">
+            <input type="number" id="ai_line_count" name="line_count" min="50" max="1000" value="200" oninput="syncAILogLineLimit()">
+            <span id="ai-line-limit-note" style="font-size:0.85em;color:#666;margin-left:8px;"></span>
+            <br><br>
+            <label class="ai-thinking-toggle">
+                <input type="checkbox" id="ai_log_thinking">
+                Enable thinking (slower, more thorough)
+            </label>
             <br><br>
             <div class="button-container">
                 <input class="manager-button" type="submit" value="&#129504; Analyze Log with AI">
-                <span id="ai-log-spinner" style="display:none;margin-left:10px">&#9203; Analyzing (may take ~30s)...</span>
+                <span id="ai-log-spinner" class="ai-status" style="display:none;">&#9203; Analyzing (may take ~30s)...</span>
             </div>
         </form>
         <div id="ai-log-analysis-result" style="margin-top: 10px;"></div>
@@ -2604,6 +2707,26 @@ async def manager():
                 }}
             }});
         }});
+
+        // True while the node list is waiting to be refreshed after a completed action.
+        // The action button stays locked until the refresh has rebuilt the dropdown.
+        let nodeListRefreshPending = false;
+
+        function setNodeActionButtonBusy(submitBtn, text) {{
+            submitBtn.disabled = true;
+            submitBtn.value = text;
+            submitBtn.classList.add('btn-disabled');
+        }}
+
+        function releaseNodeActionButton(submitBtn) {{
+            if (nodeListRefreshPending) {{
+                setNodeActionButtonBusy(submitBtn, 'Refreshing...');
+                return;
+            }}
+            submitBtn.disabled = false;
+            submitBtn.value = 'Perform Action';
+            submitBtn.classList.remove('btn-disabled');
+        }}
 
         // Function to update node list based on selected action
         function updateNodeListByAction() {{
@@ -2642,23 +2765,33 @@ async def manager():
                             resultDiv.innerHTML = "<div class='response-container'><p style='color: orange;'><strong>Notice:</strong> " + data.message + "</p></div>";
                         }}
                     }}
+                    nodeListRefreshPending = false;
                     nodeSelect.disabled = false;
                     submitBtn.disabled = !nodeSelect.value;
+                    submitBtn.value = 'Perform Action';
+                    submitBtn.classList.toggle('btn-disabled', submitBtn.disabled);
                     spinner.style.display = 'none';
                 }})
                 .catch(error => {{
+                    nodeListRefreshPending = false;
                     nodeSelect.innerHTML = '<option value="">Error loading nodes</option>';
                     nodeSelect.disabled = false;
                     submitBtn.disabled = true;
+                    submitBtn.value = 'Perform Action';
+                    submitBtn.classList.remove('btn-disabled');
                     spinner.style.display = 'none';
                     console.error('Error fetching nodes:', error);
                 }});
         }}
 
+        // Returns true when a refresh was scheduled, so the caller keeps the button locked
         function refreshNodeListAfterSuccessfulAction(data) {{
             if (data.includes('completed for node')) {{
+                nodeListRefreshPending = true;
                 setTimeout(updateNodeListByAction, 3000);
+                return true;
             }}
+            return false;
         }}
         
         // Initialize node list on page load
@@ -2703,9 +2836,7 @@ async def manager():
                     document.getElementById('node-action-result').innerHTML = "<p style='color: red;'>Error: " + error + "</p>";
                 }})
                 .finally(() => {{
-                    submitBtn.disabled = false;
-                    submitBtn.value = 'Perform Action';
-                    submitBtn.classList.remove('btn-disabled');
+                    releaseNodeActionButton(submitBtn);
                 }});
         }}
         
@@ -2717,14 +2848,15 @@ async def manager():
             event.preventDefault();
             const submitBtn = document.querySelector('#node-action-form input[type="submit"]');
             const nodeSelect = document.getElementById('redisNodeAction');
+            if (submitBtn.disabled) {{
+                return;
+            }}
             if (!nodeSelect.value) {{
                 document.getElementById('node-action-result').innerHTML = "<div class='response-container'><p style='color: orange;'><strong>Notice:</strong> All eligible nodes are already running, so there is nothing to perform.</p></div>";
                 submitBtn.disabled = true;
                 return;
             }}
-            submitBtn.disabled = true;
-            submitBtn.value = 'Processing...';
-            submitBtn.classList.add('btn-disabled');
+            setNodeActionButtonBusy(submitBtn, 'Processing...');
             document.getElementById('node-action-result').innerHTML = '';
             
             const formData = new FormData(document.getElementById('node-action-form'));
@@ -2742,17 +2874,76 @@ async def manager():
                     document.getElementById('node-action-result').innerHTML = "<p style='color: red;'>Error performing action: " + error + "</p>";
                 }})
                 .finally(() => {{
-                    submitBtn.disabled = false;
-                    submitBtn.value = 'Perform Action';
-                    submitBtn.classList.remove('btn-disabled');
+                    releaseNodeActionButton(submitBtn);
+                }});
+        }}
+
+        // True while a switch is confirmed or running. Blocks new switch requests.
+        let switchOperationPending = false;
+
+        function setSwitchControlsBusy(busy, text) {{
+            const submitBtn = document.getElementById('switch-master-slave-button');
+            const masterSelect = document.getElementById('masterNode');
+            masterSelect.disabled = busy;
+            submitBtn.disabled = busy;
+            submitBtn.value = busy ? text : 'Switch Master/Slave';
+            submitBtn.classList.toggle('btn-disabled', busy);
+        }}
+
+        // Rebuilds the master dropdown from the server, keeping the selection if that node is still a master
+        function refreshMasterList() {{
+            const masterSelect = document.getElementById('masterNode');
+            const previous = masterSelect.value;
+
+            fetch('{APP_PREFIX}/manager/get-masters/')
+                .then(response => response.json())
+                .then(data => {{
+                    masterSelect.innerHTML = '';
+                    if (data.masters && data.masters.length > 0) {{
+                        data.masters.forEach(address => {{
+                            const option = document.createElement('option');
+                            option.value = address;
+                            option.textContent = address;
+                            masterSelect.appendChild(option);
+                        }});
+                        if (data.masters.includes(previous)) {{
+                            masterSelect.value = previous;
+                        }}
+                    }} else {{
+                        const option = document.createElement('option');
+                        option.value = '';
+                        option.textContent = 'No master nodes available';
+                        masterSelect.appendChild(option);
+                    }}
+                }})
+                .catch(error => {{
+                    console.error('Error refreshing master list:', error);
+                }})
+                .finally(() => {{
+                    switchOperationPending = false;
+                    const hasMaster = masterSelect.value !== '';
+                    setSwitchControlsBusy(false, '');
+                    document.getElementById('switch-master-slave-button').disabled = !hasMaster;
                 }});
         }}
 
         function switchMasterSlave(event) {{
             event.preventDefault();
+            if (switchOperationPending) {{
+                return;
+            }}
             const formData = new FormData(document.getElementById('switch-master-slave-form'));
             const nodeAddress = formData.get('redisNode');
             const resultDiv = document.getElementById('switch-master-slave-result');
+
+            if (!nodeAddress) {{
+                resultDiv.innerHTML = "<p style='color: orange;'>No master node selected.</p>";
+                return;
+            }}
+
+            // Lock the controls while the confirmation is open and until the switch finishes
+            switchOperationPending = true;
+            setSwitchControlsBusy(true, 'Switching...');
 
             resultDiv.innerHTML = `
                 <div class="confirmation-needed" id="switch-confirmation-dialog">
@@ -2769,11 +2960,14 @@ async def manager():
                 fetch('{APP_PREFIX}/manager/switch-master-slave/?' + params)
                     .then(response => response.text())
                     .then(data => {{ resultDiv.innerHTML = data; }})
-                    .catch(error => {{ resultDiv.innerHTML = "<p style='color: red;'>Error switching master/slave: " + error + "</p>"; }});
+                    .catch(error => {{ resultDiv.innerHTML = "<p style='color: red;'>Error switching master/slave: " + error + "</p>"; }})
+                    .finally(() => {{ refreshMasterList(); }});
             }});
 
             document.getElementById('switch-cancel-btn').addEventListener('click', function() {{
                 resultDiv.innerHTML = '<p>Operation cancelled.</p>';
+                switchOperationPending = false;
+                setSwitchControlsBusy(false, '');
             }});
         }}
 
@@ -2901,25 +3095,136 @@ async def manager():
                 }});
         }}
 
+        // Node picker: "All nodes" is the default; ticking a node clears it, and clearing the last node restores it
+        // Dropdown panel: opens on trigger click, closes on outside click or Escape
+        function toggleAINodeDropdown(event) {{
+            if (event) event.stopPropagation();
+            const panel = document.getElementById('ai-node-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }}
+
+        document.addEventListener('click', function(e) {{
+            const multiselect = document.getElementById('ai-node-multiselect');
+            if (multiselect && !multiselect.contains(e.target)) {{
+                document.getElementById('ai-node-panel').style.display = 'none';
+            }}
+        }});
+
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                document.getElementById('ai-node-panel').style.display = 'none';
+            }}
+        }});
+
+        // Trigger text: "All nodes", the single node, or how many are selected
+        function updateAINodeSummary() {{
+            const selected = selectedAILogNodes();
+            const summary = document.getElementById('ai-node-summary');
+            if (document.getElementById('ai-log-all').checked) {{
+                summary.textContent = 'All nodes';
+            }} else if (selected.length === 0) {{
+                summary.textContent = 'Select nodes';
+            }} else if (selected.length === 1) {{
+                summary.textContent = selected[0];
+            }} else {{
+                summary.textContent = selected.length + ' nodes selected';
+            }}
+        }}
+
+        function aiLogAllToggled() {{
+            const all = document.getElementById('ai-log-all').checked;
+            document.querySelectorAll('input[name="ai_log_node"]').forEach(cb => {{
+                cb.disabled = all;
+                if (all) cb.checked = false;
+            }});
+            updateAINodeSummary();
+            syncAILogLineLimit();
+        }}
+
+        function aiLogNodeToggled() {{
+            const boxes = [...document.querySelectorAll('input[name="ai_log_node"]')];
+            const anyChecked = boxes.some(cb => cb.checked);
+            document.getElementById('ai-log-all').checked = !anyChecked;
+            boxes.forEach(cb => {{ cb.disabled = !anyChecked; }});
+            updateAINodeSummary();
+            syncAILogLineLimit();
+        }}
+
+        // Lines per node are capped at 100 when every active node is selected (matches the server)
+        const AI_LOG_MAX_LINES_ALL_NODES = 100;
+
+        function selectedAILogNodes() {{
+            const allChecked = document.getElementById('ai-log-all').checked;
+            return allChecked
+                ? aiLogAllNodes
+                : [...document.querySelectorAll('input[name="ai_log_node"]:checked')].map(cb => cb.value);
+        }}
+
+        function syncAILogLineLimit() {{
+            const input = document.getElementById('ai_line_count');
+            const note = document.getElementById('ai-line-limit-note');
+            const selected = selectedAILogNodes();
+            const allNodes = selected.length > 0 && selected.length === aiLogAllNodes.length;
+            if (allNodes) {{
+                input.max = AI_LOG_MAX_LINES_ALL_NODES;
+                if (Number(input.value) > AI_LOG_MAX_LINES_ALL_NODES) {{
+                    input.value = AI_LOG_MAX_LINES_ALL_NODES;
+                }}
+                note.textContent = 'Max ' + AI_LOG_MAX_LINES_ALL_NODES + ' per node when all nodes are selected';
+            }} else {{
+                input.max = 1000;
+                note.textContent = '';
+            }}
+        }}
+
+        // Analyzes the selected nodes together: one request, one merged timeline
+        let aiLogRunning = false;
+
         function fetchAILogAnalysis(event) {{
             if (event) event.preventDefault();
-            const formData = new FormData(document.getElementById('ai-log-form'));
-            const params = new URLSearchParams(formData).toString();
+            if (aiLogRunning) return;
+
+            const selectedNodes = selectedAILogNodes();
             const resultDiv = document.getElementById('ai-log-analysis-result');
             const spinner = document.getElementById('ai-log-spinner');
+            const submitBtn = document.querySelector('#ai-log-form input[type="submit"]');
+
+            if (selectedNodes.length === 0) {{
+                resultDiv.innerHTML = "<p style='color: orange;'>Select at least one node to analyze.</p>";
+                return;
+            }}
+
+            const thinking = document.getElementById('ai_log_thinking').checked;
+            const lineCount = document.getElementById('ai_line_count').value;
+            const params = new URLSearchParams({{ redisNode: selectedNodes.join(','), line_count: lineCount, thinking: thinking ? 'true' : 'false' }});
+
+            aiLogRunning = true;
+            const submitLabel = submitBtn.value;
+            setNodeActionButtonBusy(submitBtn, 'Analyzing...');
             resultDiv.innerHTML = '';
-            spinner.style.display = 'inline';
-            fetch('{APP_PREFIX}/ai/log-analysis?' + params)
+            spinner.innerHTML = '&#9203; Analyzing ' + selectedNodes.length + ' node(s) together'
+                + (thinking ? ' (thinking enabled, may take several minutes)...' : '...');
+            spinner.style.display = 'block';
+
+            fetch('{APP_PREFIX}/ai/log-analysis?' + params.toString())
                 .then(response => response.text())
                 .then(data => {{
                     resultDiv.innerHTML = data;
-                    spinner.style.display = 'none';
                 }})
                 .catch(error => {{
                     resultDiv.innerHTML = "<p style='color: red;'>Error: " + error + "</p>";
+                }})
+                .finally(() => {{
                     spinner.style.display = 'none';
+                    aiLogRunning = false;
+                    submitBtn.disabled = false;
+                    submitBtn.value = submitLabel;
+                    submitBtn.classList.remove('btn-disabled');
                 }});
         }}
+        // Apply the default selection ("All nodes") to the summary and the line limit
+        updateAINodeSummary();
+        syncAILogLineLimit();
     </script>
 
     <!-- Generic Confirmation Modal -->
@@ -3054,6 +3359,24 @@ async def manager_node_action(redisNode: str, action: str, confirmed: bool = Fal
         return HTMLResponse(content=f'<div class="response-container">{result}</div>')
     except Exception as e:
         return HTMLResponse(content=f'<div class="response-container error-message"><p>Error: {str(e)}</p></div>')
+
+@app.get("/manager/get-masters/")
+async def get_masters():
+    """
+    Returns the current master nodes, so the switch dropdown can be rebuilt after a switch.
+    """
+    from fastapi.responses import JSONResponse
+
+    masters = []
+    for pareNode in pareNodes:
+        if pareNode[4]:  # If node is configured as active
+            node_ip = pareNode[0][0]
+            port_number = pareNode[1][0]
+            if slaveORMasterNode(node_ip, port_number) == 'M':
+                masters.append(f"{node_ip}:{port_number}")
+
+    return JSONResponse(content={"masters": masters})
+
 
 @app.get("/manager/switch-master-slave/", response_class=HTMLResponse)
 async def manager_switch_master_slave(redisNode: str):
@@ -5545,10 +5868,14 @@ async def maker():
         <!-- Deploy to remote servers section -->
         <div id="maker-deploy-container" style="display: none; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
             <h3>Deploy Redis Binary to Remote Servers</h3>
-            <p>Compile Redis on remote servers with different CPU architectures:</p>
-            <div style="display: flex; align-items: center; gap: 15px;">
+            <p>Compile Redis on remote servers with different CPU architectures, or copy the compiled binary to them:</p>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 15px;">
                 <button id="maker-deploy-button" class="maker-button" onclick="makerDeployToRemote()">Deploy to Remote Servers</button>
                 <input type="text" id="maker_deploy_version" placeholder="e.g., 7.2.4" style="width: 100px; padding: 8px;">
+                <label style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                    <input type="checkbox" id="maker_compile_each_server" checked>
+                    Compile on each server
+                </label>
             </div>
             <div id="maker-deploy-result" style="margin-top: 15px;"></div>
         </div>
@@ -5633,6 +5960,13 @@ async def maker():
             
             <div style="margin-bottom: 15px;">
                 <label>
+                    <input type="checkbox" id="compile_each_server" name="compile_each_server" checked>
+                    Compile on each server (uncheck to copy the compiled binary to remote servers)
+                </label>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label>
                     <input type="checkbox" id="skip_start" name="skip_start">
                     Skip starting nodes (assume already running)
                 </label>
@@ -5709,8 +6043,10 @@ async def maker():
             const redisVersion = document.getElementById('redis_version_select').value;
             const replication = document.getElementById('replication_number').value;
             const skipCompile = document.getElementById('skip_compile').checked;
+            const compileEachServer = document.getElementById('compile_each_server').checked;
             const skipStart = document.getElementById('skip_start').checked;
-            
+            const remoteMode = compileEachServer ? 'Compile on each server' : 'Copy compiled binary to servers';
+
             // Confirm before creating
             showConfirmModal(
                 'Create Redis Cluster?',
@@ -5719,15 +6055,16 @@ async def maker():
                 <ul style="margin-top: 10px;">
                     <li><strong>Redis Version:</strong> ${{redisVersion}}</li>
                     <li><strong>Replication Factor:</strong> ${{replication}}</li>
+                    <li><strong>Remote Servers:</strong> ${{remoteMode}}</li>
                 </ul>
                 <p style="margin-top: 15px; color: #666; font-size: 0.9em;"><strong>Note:</strong> This process may take several minutes.</p>`,
                 'Create Cluster',
-                function() {{ executeCreateCluster(redisVersion, replication, skipCompile, skipStart); }},
+                function() {{ executeCreateCluster(redisVersion, replication, skipCompile, skipStart, compileEachServer); }},
                 false
             );
         }}
-        
-        function executeCreateCluster(redisVersion, replication, skipCompile, skipStart) {{
+
+        function executeCreateCluster(redisVersion, replication, skipCompile, skipStart, compileEachServer) {{
             document.getElementById('create-cluster-result').innerHTML = `
                 <div class="status-box info">
                     <h4>🔄 Creating Cluster with Redis ${{redisVersion}}...</h4>
@@ -5748,7 +6085,8 @@ async def maker():
                 redis_version: redisVersion,
                 replication_number: replication,
                 skip_compile: skipCompile,
-                skip_start: skipStart
+                skip_start: skipStart,
+                compile_each_server: compileEachServer
             }});
             
             fetch('{APP_PREFIX}/maker/create-cluster/?' + params)
@@ -5919,10 +6257,13 @@ async def maker():
                 return;
             }}
             
-            document.getElementById('maker-deploy-result').innerHTML = 
-                '<p>Deploying Redis ' + version + ' to remote servers (compiling on each server)...</p>';
-            
-            fetch('{APP_PREFIX}/maintain/copy-redis-binaries/?redis_version=' + encodeURIComponent(version))
+            const compileEachServer = document.getElementById('maker_compile_each_server').checked;
+
+            document.getElementById('maker-deploy-result').innerHTML =
+                '<p>Deploying Redis ' + version + ' to remote servers (' +
+                (compileEachServer ? 'compiling on each server' : 'copying compiled binary') + ')...</p>';
+
+            fetch('{APP_PREFIX}/maintain/copy-redis-binaries/?redis_version=' + encodeURIComponent(version) + '&compile_each_server=' + compileEachServer)
                 .then(response => response.text())
                 .then(html => {{
                     document.getElementById('maker-deploy-result').innerHTML = html;
@@ -6102,14 +6443,15 @@ async def maker_create_cluster(
     redis_version: Optional[str] = None,
     replication_number: int = 1,
     skip_compile: bool = False,
-    skip_start: bool = False
+    skip_start: bool = False,
+    compile_each_server: bool = True
 ):
     """
     Create the Redis cluster with specified Redis version.
     """
     try:
         from pareFuncWeb import create_cluster_wv
-        result = create_cluster_wv(replication_number, skip_compile, skip_start, redis_version)
+        result = create_cluster_wv(replication_number, skip_compile, skip_start, redis_version, compile_each_server=compile_each_server)
         return HTMLResponse(content=result)
     except Exception as e:
         import traceback
@@ -6231,13 +6573,14 @@ async def logout(request: Request):
 # ─── AI Endpoints ─────────────────────────────────────────────────────────────
 
 @app.get("/ai/cluster-health", response_class=HTMLResponse)
-async def ai_cluster_health():
+async def ai_cluster_health(thinking: bool = False):
     """
     AI-powered cluster state analysis.
     Checks: each master has a replica, replica is on a different server than master.
+    thinking enables the model's reasoning step (slower, off by default).
     """
     try:
-        result = ai_cluster_health_wv()
+        result = ai_cluster_health_wv(thinking=thinking)
         return HTMLResponse(content=f'<div class="response-container">{result}</div>')
     except Exception as e:
         return HTMLResponse(
@@ -6246,13 +6589,15 @@ async def ai_cluster_health():
 
 
 @app.get("/ai/log-analysis", response_class=HTMLResponse)
-async def ai_log_analysis(redisNode: str, line_count: int = 200):
+async def ai_log_analysis(redisNode: str, line_count: int = 200, thinking: bool = False):
     """
     AI-powered Redis log analysis for post-failover health check.
-    Reads the specified node's log file and asks AI to assess health.
+    redisNode is one node or several separated by commas. Their logs are merged by time
+    and analyzed together. When all nodes are selected, line_count is capped at 100 per node.
+    thinking enables the model's reasoning step (slower, off by default).
     """
     try:
-        result = ai_log_analysis_wv(redisNode, line_count)
+        result = ai_log_analysis_wv(redisNode, line_count, thinking=thinking)
         return HTMLResponse(content=f'<div class="response-container">{result}</div>')
     except Exception as e:
         return HTMLResponse(

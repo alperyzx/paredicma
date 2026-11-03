@@ -2484,6 +2484,217 @@ def extract_compile_redis_wv(redis_tarfile):
         """
 
 
+def copy_redis_binary_remote_wv(server_ip, redis_version, source_dir):
+    """
+    Copies an already compiled Redis binary tree to a remote server via rsync.
+
+    Args:
+        server_ip: IP address of the remote server
+        redis_version: Redis version string (e.g., 7.2.4)
+        source_dir: Local directory holding the compiled Redis tree (trailing slash copies its contents)
+
+    Returns:
+        dict with success status and message
+    """
+    dest_dir = f"{redisBinaryBase}redis-{redis_version}"
+
+    mkdir_status, mkdir_output = subprocess.getstatusoutput(f"ssh {pareOSUser}@{server_ip} 'mkdir -p {dest_dir}'")
+    if mkdir_status != 0:
+        return {
+            'success': False,
+            'message': f'Failed to create directory on {server_ip}: {mkdir_output}'
+        }
+
+    copy_status, copy_output = subprocess.getstatusoutput(
+        f"rsync -a --delete {source_dir} {pareOSUser}@{server_ip}:{dest_dir}/"
+    )
+    if copy_status != 0:
+        return {
+            'success': False,
+            'message': f'Failed to copy Redis {redis_version} to {server_ip}: {copy_output}'
+        }
+
+    return {
+        'success': True,
+        'message': f'Successfully copied Redis {redis_version} to {server_ip}'
+    }
+
+
+def copy_redis_binary_local_wv(redis_version, source_dir):
+    """
+    Copies a compiled Redis binary tree into the local binary directory for the given version.
+
+    Args:
+        redis_version: Redis version string (e.g., 7.2.4)
+        source_dir: Directory holding the compiled Redis tree (trailing slash copies its contents)
+
+    Returns:
+        dict with success status and message
+    """
+    dest_dir = f"{redisBinaryBase}redis-{redis_version}"
+
+    if os.path.abspath(source_dir) == os.path.abspath(dest_dir):
+        return {'success': True, 'message': f'Redis {redis_version} is already in {dest_dir}'}
+
+    os.makedirs(dest_dir, exist_ok=True)
+    copy_status, copy_output = subprocess.getstatusoutput(f"rsync -a {source_dir} {dest_dir}/")
+    if copy_status != 0:
+        return {
+            'success': False,
+            'message': f'Failed to copy Redis {redis_version} locally: {copy_output}'
+        }
+
+    return {
+        'success': True,
+        'message': f'Redis {redis_version} copied to {dest_dir}'
+    }
+
+
+def redis_binary_runs_wv(server_ip, binary_path, redis_version):
+    """
+    Checks that a Redis binary exists and runs on a server.
+    A binary built on another OS or CPU architecture fails here, so this catches it before nodes are started.
+
+    Args:
+        server_ip: IP address of the server (local or remote)
+        binary_path: Full path to redis-server on that server
+        redis_version: Expected Redis version string
+
+    Returns:
+        True if the binary runs and reports the expected version
+    """
+    if is_local_server(server_ip):
+        version_cmd = f'{binary_path} --version'
+    else:
+        version_cmd = (
+            f'ssh -q -o BatchMode=yes -o ConnectTimeout=5 -o "StrictHostKeyChecking no" '
+            f'{pareOSUser}@{server_ip} "{binary_path} --version"'
+        )
+
+    version_status, version_output = subprocess.getstatusoutput(version_cmd)
+    return version_status == 0 and f'v={redis_version}' in version_output
+
+
+def redis_cli_wv(node_ip, port_number, redis_version, *command):
+    """
+    Runs a redis-cli command against a node using the redis-cli of the given version.
+
+    Returns:
+        stdout of the command, or None if the node could not be reached
+    """
+    cli_args = [f"{redisBinaryBase}redis-{redis_version}/src/redis-cli", '-h', node_ip, '-p', str(port_number), '--no-auth-warning']
+    if redisPwdAuthentication == 'on':
+        cli_args += ['-a', redisPwd]
+    cli_args += list(command)
+
+    try:
+        result = subprocess.run(cli_args, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    return result.stdout if result.returncode == 0 else None
+
+
+def redis_node_ping_wv(node_ip, port_number, redis_version):
+    """
+    Returns True if the node answers PONG.
+    """
+    output = redis_cli_wv(node_ip, port_number, redis_version, 'ping')
+    return output is not None and 'PONG' in output
+
+
+def redis_cluster_state_wv(node_ip, port_number, redis_version):
+    """
+    Reads cluster_state from a node.
+
+    Returns:
+        'ok', 'fail', or None if the node could not be queried
+    """
+    output = redis_cli_wv(node_ip, port_number, redis_version, 'cluster', 'info')
+    if output is None:
+        return None
+
+    for line in output.splitlines():
+        if line.startswith('cluster_state:'):
+            return line.split(':', 1)[1].strip()
+    return None
+
+
+def redis_node_empty_wv(node_ip, port_number, redis_version):
+    """
+    Checks that a node is fresh enough for 'redis-cli --cluster create':
+    it knows no other nodes and holds no keys (data left from an earlier run makes creation fail).
+
+    Returns:
+        (True, '') if the node is empty, otherwise (False, reason)
+    """
+    cluster_output = redis_cli_wv(node_ip, port_number, redis_version, 'cluster', 'info')
+    dbsize_output = redis_cli_wv(node_ip, port_number, redis_version, 'dbsize')
+    if cluster_output is None or dbsize_output is None:
+        return False, 'could not be queried'
+
+    known_nodes = 0
+    for line in cluster_output.splitlines():
+        if line.startswith('cluster_known_nodes:'):
+            known_nodes = int(line.split(':', 1)[1].strip())
+
+    keys = int(dbsize_output.strip() or 0)
+    if known_nodes > 1:
+        return False, f'already knows {known_nodes - 1} other cluster node(s)'
+    if keys > 0:
+        return False, f'holds {keys} key(s) from an earlier run (its data directory must be cleared)'
+    return True, ''
+
+
+def start_server_nodes_wv(server_ip, redis_version):
+    """
+    Prepares and starts the active Redis nodes that run on one server, the same way cluster creation does.
+    Nodes that already answer are left alone.
+
+    Args:
+        server_ip: IP address of the server
+        redis_version: Redis version whose binary the nodes run
+
+    Returns:
+        dict with success status and HTML lines describing each node
+    """
+    lines = []
+    started = []
+
+    for node_number, pareNode in enumerate(pareNodes, start=1):
+        if not pareNode[4] or pareNode[0][0] != server_ip:
+            continue
+
+        port_number = pareNode[1][0]
+        if redis_node_ping_wv(server_ip, port_number, redis_version):
+            lines.append(f"<p>✓ Node {node_number} ({server_ip}:{port_number}) is already running</p>")
+            continue
+
+        redisDirMaker(server_ip, str(node_number))
+        redisConfMaker(server_ip, str(node_number), port_number, pareNode[3][0])
+        startNode(server_ip, str(node_number), port_number, pareNode[2][0], redis_version)
+        started.append((node_number, port_number))
+
+    # Give the nodes a moment, then confirm each one answers
+    not_responding = []
+    for _ in range(5):
+        sleep(2)
+        not_responding = [(n, p) for n, p in started if not redis_node_ping_wv(server_ip, p, redis_version)]
+        if not not_responding:
+            break
+
+    for node_number, port_number in started:
+        if (node_number, port_number) in not_responding:
+            lines.append(f"<p style='color: red;'>❌ Node {node_number} ({server_ip}:{port_number}) did not start</p>")
+        else:
+            lines.append(f"<p style='color: green;'>✅ Node {node_number} ({server_ip}:{port_number}) started</p>")
+
+    return {
+        'success': not not_responding,
+        'html': ''.join(lines)
+    }
+
+
 #step2 extract & compile
 def redisNewBinaryCopier_wv(redis_version, compile_each_server=True):
     """
@@ -2531,6 +2742,7 @@ def redisNewBinaryCopier_wv(redis_version, compile_each_server=True):
         skipped_servers = 0
         remote_compiled = 0
         remote_copied = 0
+        deployed_servers = []
 
         # Collect unique server IPs to avoid redundant copying
         unique_servers = set()
@@ -2576,6 +2788,7 @@ def redisNewBinaryCopier_wv(redis_version, compile_each_server=True):
                     results.append(f"<p style='color: green;'>✅ Successfully compiled Redis {redis_version} on {server_ip}</p>")
                     successful_copies += 1
                     remote_compiled += 1
+                    deployed_servers.append(server_ip)
                 else:
                     results.append(f"<p style='color: red;'>❌ Failed to compile Redis {redis_version} on {server_ip}: {compile_result.get('message', 'Unknown error')}</p>")
                     failed_copies += 1
@@ -2583,25 +2796,26 @@ def redisNewBinaryCopier_wv(redis_version, compile_each_server=True):
                 # Copy the already compiled binaries to the remote server.
                 results.append(f"<p>📦 Copying compiled Redis {redis_version} to remote server {server_ip}...</p>")
 
-                dest_dir = f"{redisBinaryBase}redis-{redis_version}"
-                mkdir_cmd = f"ssh {pareOSUser}@{server_ip} 'mkdir -p {dest_dir}'"
-                mkdir_status, mkdir_output = subprocess.getstatusoutput(mkdir_cmd)
+                copy_result = copy_redis_binary_remote_wv(server_ip, redis_version, source_dir)
 
-                if mkdir_status != 0:
-                    results.append(f"<p style='color: red;'>❌ Failed to create directory on {server_ip}: {mkdir_output}</p>")
-                    failed_copies += 1
-                    continue
-
-                rsync_cmd = f"rsync -a --delete {source_dir} {pareOSUser}@{server_ip}:{dest_dir}/"
-                copy_status, copy_output = subprocess.getstatusoutput(rsync_cmd)
-
-                if copy_status != 0:
-                    results.append(f"<p style='color: red;'>❌ Failed to copy Redis {redis_version} to {server_ip}: {copy_output}</p>")
-                    failed_copies += 1
-                else:
-                    results.append(f"<p style='color: green;'>✅ Successfully copied Redis {redis_version} to {server_ip}</p>")
+                if copy_result['success']:
+                    results.append(f"<p style='color: green;'>✅ {copy_result['message']}</p>")
                     successful_copies += 1
                     remote_copied += 1
+                    deployed_servers.append(server_ip)
+                else:
+                    results.append(f"<p style='color: red;'>❌ {copy_result['message']}</p>")
+                    failed_copies += 1
+
+        # Start the nodes on each deployed server, as cluster creation would.
+        # Skipped once the cluster exists, so a running cluster is not touched.
+        if not os.path.isfile('paredicma.done'):
+            for server_ip in deployed_servers:
+                results.append(f"<p>🚀 Starting Redis nodes on {server_ip}...</p>")
+                start_result = start_server_nodes_wv(server_ip, redis_version)
+                results.append(start_result['html'])
+        else:
+            results.append("<p>ℹ️ Cluster already exists, so nodes were not started by this deploy.</p>")
 
         # Generate the summary report
         mode_label = "compiled" if compile_each_server else "copied"
@@ -3586,16 +3800,17 @@ def validate_cluster_nodes_wv():
         }
 
 
-def create_cluster_wv(replication_number, skip_compile=False, skip_start=False, redis_version=None):
+def create_cluster_wv(replication_number, skip_compile=False, skip_start=False, redis_version=None, compile_each_server=True):
     """
     Web interface version of pareClusterMaker.
     Creates Redis cluster with step-by-step progress reporting.
-    
+
     Args:
         replication_number: Number of replicas per master (0, 1, 2, etc.)
         skip_compile: If True, skip Redis compilation (use existing binaries)
         skip_start: If True, skip starting nodes (assume already running)
         redis_version: Redis version to use (if None, uses configured redisVersion)
+        compile_each_server: If True, compile Redis on each remote server; if False, copy the locally compiled binary to them
         
     Returns:
         HTML formatted result of the cluster creation process
@@ -3699,62 +3914,98 @@ def create_cluster_wv(replication_number, skip_compile=False, skip_start=False, 
             
             # Step 2: Compile Redis (optional)
             if doCompile and not skip_compile:
-                steps_html.append(f"""
-                <div class="step" style="padding: 10px; margin: 5px 0; border-left: 4px solid #17a2b8;">
-                    <strong>Step 2:</strong> Compiling Redis {selected_version}...
-                </div>
-                """)
-                
-                compile_result = compile_redis_wv(selected_tar_file, selected_version)
-                
-                if compile_result['success']:
+                # Resume: reuse a local build that already runs instead of recompiling
+                local_build_ready = redis_binary_runs_wv(pareServerIp, f"redis-{selected_version}/src/redis-server", selected_version)
+
+                if local_build_ready:
                     steps_html.append(f"""
                     <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
-                        ✓ Redis {selected_version} compiled successfully (local)
+                        ✓ Step 2: Redis {selected_version} is already built locally (skipping compile)
                     </div>
                     """)
-                    
-                    # Copy binaries to local servers and compile on remote servers
+                    compile_result = {'success': True, 'message': 'Already built'}
+                else:
+                    steps_html.append(f"""
+                    <div class="step" style="padding: 10px; margin: 5px 0; border-left: 4px solid #17a2b8;">
+                        <strong>Step 2:</strong> Compiling Redis {selected_version}...
+                    </div>
+                    """)
+                    compile_result = compile_redis_wv(selected_tar_file, selected_version)
+
+                if compile_result['success']:
+                    if not local_build_ready:
+                        steps_html.append(f"""
+                        <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
+                            ✓ Redis {selected_version} compiled successfully (local)
+                        </div>
+                        """)
+
+                    # Copy binaries to local servers and distribute to remote servers
                     local_servers = []
                     remote_servers = []
-                    
+
                     for server in unique_servers:
                         if is_local_server(server):
                             local_servers.append(server)
-                            redisBinaryCopier(server, selected_version)
                         else:
                             remote_servers.append(server)
-                    
-                    if local_servers:
+
+                    local_copy_failed = False
+                    for server in local_servers:
+                        local_copy = copy_redis_binary_local_wv(selected_version, f"redis-{selected_version}/")
+                        if not local_copy['success']:
+                            local_copy_failed = True
+                            errors.append(f"Local binary copy failed on {server}: {local_copy['message']}")
+
+                    if local_servers and not local_copy_failed:
                         steps_html.append(f"""
                         <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
                             ✓ Binaries copied to {len(local_servers)} local server(s)
                         </div>
                         """)
-                    
-                    # Compile on remote servers (different architecture)
+
+                    # Compile on remote servers (different architecture) or copy the local binary to them
                     if remote_servers:
+                        action_label = 'Compiling on' if compile_each_server else 'Copying compiled Redis to'
                         steps_html.append(f"""
                         <div class="step" style="padding: 10px; margin: 5px 0; border-left: 4px solid #17a2b8;">
-                            ⚙️ Compiling on {len(remote_servers)} remote server(s) (different architecture)...
+                            ⚙️ {action_label} {len(remote_servers)} remote server(s)...
                         </div>
                         """)
-                        
-                        remote_compile_success = True
+
                         for remote_server in remote_servers:
-                            remote_result = compile_redis_remote_wv(remote_server, selected_tar_file, selected_version)
+                            remote_binary = f"{redisBinaryBase}redis-{selected_version}/src/redis-server"
+
+                            # Resume: skip servers that already run this version
+                            if redis_binary_runs_wv(remote_server, remote_binary, selected_version):
+                                steps_html.append(f"""
+                                <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
+                                    ✓ Redis {selected_version} already runs on {remote_server} (skipped)
+                                </div>
+                                """)
+                                continue
+
+                            if compile_each_server:
+                                remote_result = compile_redis_remote_wv(remote_server, selected_tar_file, selected_version)
+                            else:
+                                remote_result = copy_redis_binary_remote_wv(remote_server, selected_version, f"redis-{selected_version}/")
+                                if remote_result['success'] and not redis_binary_runs_wv(remote_server, remote_binary, selected_version):
+                                    remote_result = {
+                                        'success': False,
+                                        'message': 'copied binary does not run on this server (built on a different OS or CPU). Use "Compile on each server".'
+                                    }
+
                             if remote_result['success']:
                                 steps_html.append(f"""
                                 <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
-                                    ✓ Redis compiled successfully on {remote_server}
+                                    ✓ {remote_result['message']}
                                 </div>
                                 """)
                             else:
-                                remote_compile_success = False
-                                errors.append(f"Remote compilation failed on {remote_server}: {remote_result.get('message', 'Unknown error')}")
+                                errors.append(f"Remote setup failed on {remote_server}: {remote_result.get('message', 'Unknown error')}")
                                 steps_html.append(f"""
                                 <div class="step error" style="padding: 10px; margin: 5px 0; border-left: 4px solid #dc3545;">
-                                    ❌ Failed to compile on {remote_server}: {remote_result.get('message', 'Unknown error')}
+                                    ❌ Failed on {remote_server}: {remote_result.get('message', 'Unknown error')}
                                 </div>
                                 """)
                 else:
@@ -3776,6 +4027,8 @@ def create_cluster_wv(replication_number, skip_compile=False, skip_start=False, 
                 
                 node_number = 0
                 started_nodes = 0
+                already_running = 0
+                active_addresses = []
                 
                 for pareNode in pareNodes:
                     node_ip = pareNode[0][0]
@@ -3784,17 +4037,36 @@ def create_cluster_wv(replication_number, skip_compile=False, skip_start=False, 
                     node_number += 1
                     
                     if pareNode[4]:
-                        startNode(node_ip, str(node_number), port_number, dedicate_cpu_cores)
+                        active_addresses.append((node_ip, port_number))
+                        # Resume: leave nodes that already answer untouched
+                        if redis_node_ping_wv(node_ip, port_number, selected_version):
+                            already_running += 1
+                            continue
+                        startNode(node_ip, str(node_number), port_number, dedicate_cpu_cores, selected_version)
                         started_nodes += 1
                 
-                # Wait for nodes to start
-                sleep(2)
+                # Wait for nodes to start, then confirm every node answers before forming the cluster
+                not_responding = []
+                for _ in range(5):
+                    sleep(2)
+                    not_responding = [(ip, port) for ip, port in active_addresses if not redis_node_ping_wv(ip, port, selected_version)]
+                    if not not_responding:
+                        break
                 
-                steps_html.append(f"""
-                <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
-                    ✓ Started {started_nodes} Redis nodes
-                </div>
-                """)
+                if not_responding:
+                    failed_list = ', '.join(f'{ip}:{port}' for ip, port in not_responding)
+                    errors.append(f"Redis nodes not responding: {failed_list}. Check the binary and logs on those servers, then click Create Cluster again.")
+                    steps_html.append(f"""
+                    <div class="step error" style="padding: 10px; margin: 5px 0; border-left: 4px solid #dc3545;">
+                        ❌ {len(not_responding)} node(s) not responding: {failed_list}
+                    </div>
+                    """)
+                else:
+                    steps_html.append(f"""
+                    <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
+                        ✓ Redis nodes ready: {started_nodes} started, {already_running} already running
+                    </div>
+                    """)
             else:
                 steps_html.append("""
                 <div class="step skipped" style="padding: 10px; margin: 5px 0; border-left: 4px solid #6c757d;">
@@ -3803,34 +4075,64 @@ def create_cluster_wv(replication_number, skip_compile=False, skip_start=False, 
                 """)
             
             # Step 4: Create cluster
-            if redisCluster == 'on':
+            if redisCluster == 'on' and errors:
                 steps_html.append("""
-                <div class="step" style="padding: 10px; margin: 5px 0; border-left: 4px solid #17a2b8;">
-                    <strong>Step 4:</strong> Creating Redis Cluster...
+                <div class="step skipped" style="padding: 10px; margin: 5px 0; border-left: 4px solid #6c757d;">
+                    ⏭ Step 4: Cluster creation skipped because of the errors above. Fix them and click Create Cluster again; completed steps are skipped on retry.
                 </div>
                 """)
-                
-                nodes_string = ''
-                for pareNode in pareNodes:
-                    node_ip = pareNode[0][0]
-                    port_number = pareNode[1][0]
-                    if pareNode[4]:
-                        nodes_string += ' ' + node_ip + ':' + port_number
-                
-                # Execute cluster creation
-                cluster_result = make_redis_cluster_wv(nodes_string, replication_number, selected_version)
-                
-                if cluster_result['success']:
-                    # Create marker file
+            elif redisCluster == 'on':
+                active_addresses = [(pareNode[0][0], pareNode[1][0]) for pareNode in pareNodes if pareNode[4]]
+                first_ip, first_port = active_addresses[0]
+
+                # Resume: a cluster that already formed is not recreated
+                if redis_cluster_state_wv(first_ip, first_port, selected_version) == 'ok':
                     os.system('touch paredicma.done')
-                    
-                    steps_html.append(f"""
+                    steps_html.append("""
                     <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
-                        ✓ Redis Cluster created successfully with {replication_number} replica(s) per master
+                        ✓ Step 4: Redis cluster is already formed (cluster_state:ok), skipping creation
                     </div>
                     """)
                 else:
-                    errors.append(f"Cluster creation failed: {cluster_result.get('message', 'Unknown error')}")
+                    # redis-cli --cluster create refuses nodes that hold data or know other nodes
+                    not_empty = []
+                    for ip, port in active_addresses:
+                        is_empty, reason = redis_node_empty_wv(ip, port, selected_version)
+                        if not is_empty:
+                            not_empty.append(f"{ip}:{port} {reason}")
+
+                    if not_empty:
+                        errors.append("Nodes not empty, cluster cannot be created: " + '; '.join(not_empty) + '. Clear those data directories, then click Create Cluster again.')
+                        steps_html.append(f"""
+                        <div class="step error" style="padding: 10px; margin: 5px 0; border-left: 4px solid #dc3545;">
+                            ❌ Step 4: {len(not_empty)} node(s) not empty: {'; '.join(not_empty)}
+                        </div>
+                        """)
+                    else:
+                        steps_html.append("""
+                        <div class="step" style="padding: 10px; margin: 5px 0; border-left: 4px solid #17a2b8;">
+                            <strong>Step 4:</strong> Creating Redis Cluster...
+                        </div>
+                        """)
+                    
+                        nodes_string = ''
+                        for ip, port in active_addresses:
+                            nodes_string += ' ' + ip + ':' + port
+                    
+                        # Execute cluster creation
+                        cluster_result = make_redis_cluster_wv(nodes_string, replication_number, selected_version)
+                    
+                        if cluster_result['success']:
+                            # Create marker file
+                            os.system('touch paredicma.done')
+                        
+                            steps_html.append(f"""
+                            <div class="step success" style="padding: 10px; margin: 5px 0; border-left: 4px solid #28a745;">
+                                ✓ Redis Cluster created successfully with {replication_number} replica(s) per master
+                            </div>
+                            """)
+                        else:
+                            errors.append(f"Cluster creation failed: {cluster_result.get('message', 'Unknown error')}")
             
             # Restore original logWrite
             logWrite = original_logWrite
@@ -4028,6 +4330,7 @@ def compile_redis_remote_wv(server_ip, tar_file, version):
         remote_compile_cmd = (
             f'ssh -q -o "StrictHostKeyChecking no" {pareOSUser}@{server_ip} -C "'
             f'cd {redisBinaryBase} && '
+            f'rm -rf redis-{version} && '
             f'tar -xvf {tar_file} && '
             f'cd redis-{version} && '
             f'make"'
@@ -4217,7 +4520,7 @@ def get_cluster_creation_form_wv():
 
 # ─── AI Analysis Web Functions ─────────────────────────────────────────────────
 
-def ai_cluster_health_wv() -> str:
+def ai_cluster_health_wv(thinking: bool = False) -> str:
     """
     Gather cluster topology and call AI to analyze health.
     Checks: each master has a replica, replica is on a different server.
@@ -4225,7 +4528,7 @@ def ai_cluster_health_wv() -> str:
     """
     try:
         from pareAI import analyze_cluster_health
-        result = analyze_cluster_health()
+        result = analyze_cluster_health(thinking=thinking)
 
         if result.get("error"):
             return '<div class="error-box"><strong>Error gathering cluster data:</strong> ' + result["error"] + '</div>'
@@ -4304,21 +4607,23 @@ def ai_cluster_health_wv() -> str:
         return '<div class="error-box">AI cluster analysis failed: ' + str(e) + '</div>'
 
 
-def ai_log_analysis_wv(redisNode: str, line_count: int = 200) -> str:
+def ai_log_analysis_wv(redisNode: str, line_count: int = 200, thinking: bool = False) -> str:
     """
-    Read a node's Redis log and use AI to analyze it for post-failover health.
+    Read the logs of the selected nodes, merge them by time, and use AI to analyze them together.
+    redisNode is one node or several separated by commas.
     Returns styled HTML with the AI analysis result.
     """
     try:
         from pareAI import analyze_logs
-        result = analyze_logs(redisNode, line_count)
+        nodes = [node for node in redisNode.split(',') if node]
+        result = analyze_logs(nodes, line_count, thinking=thinking)
 
         if result.get("error"):
-            return '<div class="error-box"><strong>Error reading log:</strong> ' + result["error"] + '</div>'
+            return '<div class="error-box"><strong>Error reading logs:</strong> ' + result["error"] + '</div>'
 
         analysis = result.get("analysis", "No analysis returned.")
         model_used = result.get("model", "unknown")
-        lines_checked = result.get("log_lines", line_count)
+        analyzed_nodes = result.get("nodes", nodes)
 
         au = analysis.upper()
         if "CRITICAL" in au:
@@ -4331,9 +4636,21 @@ def ai_log_analysis_wv(redisNode: str, line_count: int = 200) -> str:
         html = '<div style="margin-top:10px">'
         html += "<h4>AI Log Analysis</h4>"
         html += (
-            '<p class="ai-node-note">Analyzed last '
-            + str(lines_checked) + ' log lines from node ' + redisNode + '</p>'
+            '<p class="ai-node-note">Analyzed ' + str(result.get("log_lines", 0)) + ' merged log lines '
+            + 'from ' + str(len(analyzed_nodes)) + ' node(s): ' + ', '.join(analyzed_nodes) + '</p>'
         )
+        if result.get("lines_clamped"):
+            html += (
+                '<p class="ai-node-note">All nodes selected: lines per node were limited to '
+                + str(result.get("lines_per_node")) + '.</p>'
+            )
+        if result.get("omitted_lines"):
+            html += (
+                '<p class="ai-node-note">Size limit: ' + str(result["omitted_lines"])
+                + ' earlier lines were left out.</p>'
+            )
+        for node_error in result.get("node_errors", []):
+            html += '<p class="ai-node-note" style="color:#b35900;">' + node_error + '</p>'
         html += (
             '<div class="ai-result-box ai-result-' + level + '">'
             + analysis + '</div>'
