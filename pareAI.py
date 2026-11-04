@@ -41,7 +41,12 @@ def ollama_chat(prompt: str, model: str = None, timeout: int = 120, thinking: bo
         if resp.status_code >= 400:
             # Show the body: Ollama and the gateway explain what was rejected there
             return f"ERROR: {resp.status_code} from {url}: {resp.text[:300]}"
-        return strip_thinking(resp.json().get("response", "").strip())
+        data = resp.json()
+        text = data.get("response", "").strip()
+        if thinking and data.get("done_reason") == "length" and "</think>" not in text:
+            # The reply limit ran out while the model was still reasoning, so there is no answer yet
+            return "ERROR: The model ran out of reply tokens while thinking, before giving an answer. Try again with a shorter log range, or turn thinking off."
+        return strip_thinking(text)
     except requests.exceptions.ConnectionError:
         return "ERROR: Cannot reach Ollama at " + ollamaUrl + ". Is Ollama running?"
     except requests.exceptions.Timeout:
@@ -323,9 +328,9 @@ def get_raw_log_content(redisNode: str, line_count: int = 200) -> str:
         return f"ERROR: {str(e)}"
 
 
-# Log analysis limits. When every active node is selected, each node contributes at most
-# MAX_ALL_NODES_LINES lines. The prompt must fit COMBINED_NUM_CTX tokens together with the output.
-MAX_ALL_NODES_LINES = 100
+# Log analysis limits: lines per node, 10 to 100. The prompt must fit COMBINED_NUM_CTX tokens together with the output.
+MIN_LOG_LINES = 10
+MAX_LOG_LINES = 100
 COMBINED_NUM_CTX = 32768
 PROMPT_OVERHEAD_TOKENS = 1000   # instructions and template text around the logs
 REPLY_TOKENS = 1024             # num_predict without thinking
@@ -434,16 +439,15 @@ def _active_node_addresses() -> list:
 def analyze_logs(nodes: list, line_count: int = 200, thinking: bool = False) -> dict:
     """
     Reads the logs of one or more nodes, merges them by time, and asks AI for one analysis.
-    When every active node is selected, line_count is capped at MAX_ALL_NODES_LINES.
+    line_count is kept within MIN_LOG_LINES..MAX_LOG_LINES per node.
     """
     nodes = [node.strip() for node in nodes if node.strip()]
     if not nodes:
         return {"error": "ERROR: No nodes selected.", "analysis": None}
 
-    all_selected = set(nodes) >= set(_active_node_addresses())
-    lines_clamped = all_selected and line_count > MAX_ALL_NODES_LINES
-    if lines_clamped:
-        line_count = MAX_ALL_NODES_LINES
+    requested_lines = line_count
+    line_count = min(max(line_count, MIN_LOG_LINES), MAX_LOG_LINES)
+    lines_clamped = line_count != requested_lines
 
     node_logs = {}
     node_errors = []

@@ -2678,8 +2678,7 @@ async def manager():
             <script>const aiLogAllNodes = [{''.join([f"'{node}'," for node in nodeList])}];</script>
             <br>
             <label for="ai_line_count">Log lines to analyze:</label>
-            <input type="number" id="ai_line_count" name="line_count" min="50" max="1000" value="200" oninput="syncAILogLineLimit()">
-            <span id="ai-line-limit-note" style="font-size:0.85em;color:#666;margin-left:8px;"></span>
+            <input type="number" id="ai_line_count" name="line_count" min="10" max="100" value="10" oninput="syncAILogLineLimit()">
             <br><br>
             <label class="ai-thinking-toggle">
                 <input type="checkbox" id="ai_log_thinking">
@@ -3150,8 +3149,9 @@ async def manager():
             syncAILogLineLimit();
         }}
 
-        // Lines per node are capped at 100 when every active node is selected (matches the server)
-        const AI_LOG_MAX_LINES_ALL_NODES = 100;
+        // Lines per node: 10 to 100 (matches the server)
+        const AI_LOG_MIN_LINES = 10;
+        const AI_LOG_MAX_LINES = 100;
 
         function selectedAILogNodes() {{
             const allChecked = document.getElementById('ai-log-all').checked;
@@ -3160,20 +3160,14 @@ async def manager():
                 : [...document.querySelectorAll('input[name="ai_log_node"]:checked')].map(cb => cb.value);
         }}
 
+        // Keeps the line count inside the allowed range
         function syncAILogLineLimit() {{
             const input = document.getElementById('ai_line_count');
-            const note = document.getElementById('ai-line-limit-note');
-            const selected = selectedAILogNodes();
-            const allNodes = selected.length > 0 && selected.length === aiLogAllNodes.length;
-            if (allNodes) {{
-                input.max = AI_LOG_MAX_LINES_ALL_NODES;
-                if (Number(input.value) > AI_LOG_MAX_LINES_ALL_NODES) {{
-                    input.value = AI_LOG_MAX_LINES_ALL_NODES;
-                }}
-                note.textContent = 'Max ' + AI_LOG_MAX_LINES_ALL_NODES + ' per node when all nodes are selected';
-            }} else {{
-                input.max = 1000;
-                note.textContent = '';
+            const value = Number(input.value);
+            if (input.value === '' || value < AI_LOG_MIN_LINES) {{
+                input.value = AI_LOG_MIN_LINES;
+            }} else if (value > AI_LOG_MAX_LINES) {{
+                input.value = AI_LOG_MAX_LINES;
             }}
         }}
 
@@ -3195,6 +3189,7 @@ async def manager():
             }}
 
             const thinking = document.getElementById('ai_log_thinking').checked;
+            syncAILogLineLimit();
             const lineCount = document.getElementById('ai_line_count').value;
             const params = new URLSearchParams({{ redisNode: selectedNodes.join(','), line_count: lineCount, thinking: thinking ? 'true' : 'false' }});
 
