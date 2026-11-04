@@ -4641,8 +4641,8 @@ def ai_log_analysis_wv(redisNode: str, line_count: int = 200, thinking: bool = F
         )
         if result.get("lines_clamped"):
             html += (
-                '<p class="ai-node-note">All nodes selected: lines per node were limited to '
-                + str(result.get("lines_per_node")) + '.</p>'
+                '<p class="ai-node-note">Lines per node were limited to '
+                + str(result.get("lines_per_node")) + ' (allowed range: 10 to 100).</p>'
             )
         if result.get("omitted_lines"):
             html += (
