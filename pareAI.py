@@ -38,7 +38,9 @@ def ollama_chat(prompt: str, model: str = None, timeout: int = 120, thinking: bo
     }
     try:
         resp = requests.post(url, json=payload, timeout=timeout)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            # Show the body: Ollama and the gateway explain what was rejected there
+            return f"ERROR: {resp.status_code} from {url}: {resp.text[:300]}"
         return strip_thinking(resp.json().get("response", "").strip())
     except requests.exceptions.ConnectionError:
         return "ERROR: Cannot reach Ollama at " + ollamaUrl + ". Is Ollama running?"
